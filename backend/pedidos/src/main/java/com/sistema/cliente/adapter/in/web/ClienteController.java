@@ -1,0 +1,87 @@
+package com.sistema.cliente.adapter.in.web;
+
+import com.sistema.cliente.adapter.in.web.dto.ActualizarClienteRequest;
+import com.sistema.cliente.adapter.in.web.dto.ClienteRequest;
+import com.sistema.cliente.adapter.in.web.dto.ClienteResponse;
+import com.sistema.cliente.model.Cliente;
+import com.sistema.cliente.port.in.ConsultarCliente;
+import com.sistema.cliente.port.in.GestionarCliente;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/clientes")
+@Tag(name = "Clientes")
+public class ClienteController {
+
+	private final GestionarCliente gestionarCliente;
+	private final ConsultarCliente consultarCliente;
+
+	public ClienteController(GestionarCliente gestionarCliente, ConsultarCliente consultarCliente) {
+		this.gestionarCliente = gestionarCliente;
+		this.consultarCliente = consultarCliente;
+	}
+
+	@PostMapping
+	public ResponseEntity<ClienteResponse> crear(@RequestBody ClienteRequest request) {
+		Cliente cliente = gestionarCliente.crearCliente(new GestionarCliente.CrearClienteCommand(
+				request.razonSocial(), request.cuit(), request.email(), request.telefono(),
+				request.domicilio(), request.zonaId()));
+		return ResponseEntity.status(HttpStatus.CREATED).body(ClienteResponse.from(cliente));
+	}
+
+	@PutMapping("/{id}")
+	public ResponseEntity<ClienteResponse> actualizar(@PathVariable Long id, @RequestBody ActualizarClienteRequest request) {
+		Cliente cliente = gestionarCliente.actualizarCliente(new GestionarCliente.ActualizarClienteCommand(
+				id, request.razonSocial(), request.email(), request.telefono(), request.domicilio(), request.zonaId()));
+		return ResponseEntity.ok(ClienteResponse.from(cliente));
+	}
+
+	@PatchMapping("/{id}/desactivar")
+	public ResponseEntity<Void> desactivar(@PathVariable Long id) {
+		gestionarCliente.desactivarCliente(id);
+		return ResponseEntity.noContent().build();
+	}
+
+	@PatchMapping("/{id}/reactivar")
+	public ResponseEntity<Void> reactivar(@PathVariable Long id) {
+		gestionarCliente.reactivarCliente(id);
+		return ResponseEntity.noContent().build();
+	}
+
+	@GetMapping("/{id}")
+	public ResponseEntity<ClienteResponse> buscarPorId(@PathVariable Long id) {
+		return consultarCliente.buscarPorId(id)
+				.map(ClienteResponse::from)
+				.map(ResponseEntity::ok)
+				.orElse(ResponseEntity.notFound().build());
+	}
+
+	@GetMapping("/buscar/cuit/{cuit}")
+	public ResponseEntity<ClienteResponse> buscarPorCuit(@PathVariable String cuit) {
+		return consultarCliente.buscarPorCuit(cuit)
+				.map(ClienteResponse::from)
+				.map(ResponseEntity::ok)
+				.orElse(ResponseEntity.notFound().build());
+	}
+
+	@GetMapping
+	public List<ClienteResponse> listar(@RequestParam(required = false) Long zonaId) {
+		List<Cliente> clientes = zonaId == null
+				? consultarCliente.listarTodos()
+				: consultarCliente.listarPorZona(zonaId);
+		return clientes.stream().map(ClienteResponse::from).toList();
+	}
+}

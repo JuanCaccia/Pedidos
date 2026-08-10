@@ -1,0 +1,12 @@
+package com.sistema.pedido.model;
+
+public enum EstadoPedido {
+	PENDIENTE_CONFIRMACION,
+	PENDIENTE_PREPARACION,
+	PENDIENTE_ENTREGA,
+	EN_VIAJE,
+	ENTREGADO,
+	ENTREGADO_PARCIAL,
+	RE_AGENDADO,
+	RECHAZADO
+}

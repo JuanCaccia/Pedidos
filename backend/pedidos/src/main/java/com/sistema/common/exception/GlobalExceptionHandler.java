@@ -34,20 +34,20 @@ public class GlobalExceptionHandler {
 		Map<String, String> fieldErrors = new LinkedHashMap<>();
 		ex.getBindingResult().getFieldErrors()
 				.forEach(fe -> fieldErrors.putIfAbsent(fe.getField(), fe.getDefaultMessage()));
-		ApiError error = ApiError.of(HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", "Invalid request", fieldErrors);
+		ApiError error = ApiError.of(HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", "Solicitud inválida", fieldErrors);
 		return ResponseEntity.badRequest().body(error);
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	public ResponseEntity<ApiError> handleUnreadable(HttpMessageNotReadableException ex) {
-		ApiError error = ApiError.of(HttpStatus.BAD_REQUEST.value(), "MALFORMED_BODY", "Malformed request body");
+		ApiError error = ApiError.of(HttpStatus.BAD_REQUEST.value(), "MALFORMED_BODY", "Cuerpo de solicitud inválido");
 		return ResponseEntity.badRequest().body(error);
 	}
 
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiError> handleGeneric(Exception ex) {
 		log.error("Unhandled error", ex);
-		ApiError error = ApiError.of(HttpStatus.INTERNAL_SERVER_ERROR.value(), "INTERNAL_ERROR", "Internal server error");
+		ApiError error = ApiError.of(HttpStatus.INTERNAL_SERVER_ERROR.value(), "INTERNAL_ERROR", "Error interno del servidor");
 		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
 	}
 }

@@ -15,6 +15,37 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./pedidos
+    container_name: pedidos-backend
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: pedidos
+      DB_USER: pedidos
+      DB_PASSWORD: pedidos
+      JWT_SECRET: ${JWT_SECRET:-cambiar-en-produccion-esta-clave-secreta-jwt-2026}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend/frontend
+    container_name: pedidos-frontend
+    environment:
+      API_PROXY_TARGET: http://backend:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
   pedidos_pg_data:

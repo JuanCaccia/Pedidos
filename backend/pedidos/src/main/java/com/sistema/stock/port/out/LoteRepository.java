@@ -2,6 +2,7 @@ package com.sistema.stock.port.out;
 
 import com.sistema.stock.model.Lote;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,4 +13,6 @@ public interface LoteRepository {
 	Optional<Lote> findById(Long id);
 
 	List<Lote> findByItemId(Long itemId);
+
+	List<Lote> findByFechaVencimientoNotNullAndFechaVencimientoLessThanEqual(LocalDate fecha);
 }

@@ -33,7 +33,7 @@ public class UsuarioService implements GestionarUsuario, ConsultarUsuario {
 		validarDatosComunes(command.nombre(), command.email(), command.password(), command.roles());
 		String emailNormalizado = command.email().trim().toLowerCase();
 		usuarioRepository.findByEmail(emailNormalizado).ifPresent(u -> {
-			throw new BusinessException("USUARIO_EMAIL_DUPLICADO", "A user with that email already exists");
+			throw new BusinessException("USUARIO_EMAIL_DUPLICADO", "Ya existe un usuario con ese email");
 		});
 		Usuario usuario = new Usuario(command.nombre().trim(), emailNormalizado,
 				passwordEncoder.encode(command.password()), command.roles());
@@ -79,23 +79,40 @@ public class UsuarioService implements GestionarUsuario, ConsultarUsuario {
 		return usuarioRepository.findAll();
 	}
 
+	@Override
+	@Transactional
+	public void cambiarPassword(CambiarPasswordCommand command) {
+		boolean esMismoUsuario = command.actor() != null && command.actor().getId() != null
+				&& command.actor().getId().equals(command.usuarioId());
+		if (!esMismoUsuario && (command.actor() == null || !command.actor().tieneRol(Rol.ADMINISTRATIVO))) {
+			throw new BusinessException("SIN_PERMISO", "No tiene permisos para cambiar esta contraseña");
+		}
+		if (command.nuevaPassword() == null || command.nuevaPassword().length() < 6) {
+			throw new BusinessException("VALIDATION_ERROR", "La contraseña debe tener al menos 6 caracteres");
+		}
+		Usuario usuario = usuarioRepository.findById(command.usuarioId())
+				.orElseThrow(() -> new NotFoundException("Usuario no encontrado: " + command.usuarioId()));
+		usuario.setPasswordHash(passwordEncoder.encode(command.nuevaPassword()));
+		usuarioRepository.save(usuario);
+	}
+
 	private Usuario obtenerO404(Long usuarioId) {
 		return usuarioRepository.findById(usuarioId)
-				.orElseThrow(() -> new NotFoundException("User not found: " + usuarioId));
+				.orElseThrow(() -> new NotFoundException("Usuario no encontrado: " + usuarioId));
 	}
 
 	private void validarDatosComunes(String nombre, String email, String password, Set<Rol> roles) {
 		if (nombre == null || nombre.isBlank()) {
-			throw new BusinessException("VALIDATION_ERROR", "Name is required");
+			throw new BusinessException("VALIDATION_ERROR", "El nombre es obligatorio");
 		}
 		if (email == null || !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-			throw new BusinessException("VALIDATION_ERROR", "A valid email is required");
+			throw new BusinessException("VALIDATION_ERROR", "Se requiere un email válido");
 		}
 		if (password == null || password.length() < 6) {
-			throw new BusinessException("VALIDATION_ERROR", "Password must be at least 6 characters");
+			throw new BusinessException("VALIDATION_ERROR", "La contraseña debe tener al menos 6 caracteres");
 		}
 		if (roles == null || roles.isEmpty()) {
-			throw new BusinessException("VALIDATION_ERROR", "At least one role is required");
+			throw new BusinessException("VALIDATION_ERROR", "Se requiere al menos un rol");
 		}
 	}
 }

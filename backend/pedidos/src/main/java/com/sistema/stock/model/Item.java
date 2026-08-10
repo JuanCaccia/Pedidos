@@ -1,5 +1,7 @@
 package com.sistema.stock.model;
 
+import java.math.BigDecimal;
+
 public class Item {
 
 	private Long id;
@@ -7,6 +9,7 @@ public class Item {
 	private String nombre;
 	private String unidadMedida;
 	private boolean activo = true;
+	private BigDecimal stockMinimo = BigDecimal.ZERO;
 
 	public Item() {
 	}
@@ -15,6 +18,7 @@ public class Item {
 		this.sku = sku;
 		this.nombre = nombre;
 		this.unidadMedida = unidadMedida;
+		this.stockMinimo = BigDecimal.ZERO;
 	}
 
 	public void desactivar() {
@@ -59,5 +63,13 @@ public class Item {
 
 	public void setActivo(boolean activo) {
 		this.activo = activo;
+	}
+
+	public BigDecimal getStockMinimo() {
+		return stockMinimo;
+	}
+
+	public void setStockMinimo(BigDecimal stockMinimo) {
+		this.stockMinimo = stockMinimo;
 	}
 }

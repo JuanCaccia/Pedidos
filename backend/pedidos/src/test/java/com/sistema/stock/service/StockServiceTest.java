@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StockServiceTest {
 
@@ -47,7 +49,7 @@ class StockServiceTest {
 	}
 
 	private Long itemConIngreso(String sku, BigDecimal cantidad) {
-		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand(sku, "Item " + sku, "UN"));
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand(sku, "Item " + sku, "UN", null));
 		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "LOTE-" + sku, null, cantidad, "Test"));
 		return item.getId();
 	}
@@ -136,17 +138,82 @@ class StockServiceTest {
 
 	@Test
 	void itemDuplicadoOInexistente() {
-		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-X", "X", "UN"));
+		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-X", "X", "UN", null));
 		assertThrows(BusinessException.class, () -> stockService.crearItem(
-				new GestionarItem.CrearItemCommand("sku-x", "Y", "UN")));
+				new GestionarItem.CrearItemCommand("sku-x", "Y", "UN", null)));
 		assertThrows(NotFoundException.class, () -> stockService.desactivarItem(999L));
 	}
 
 	@Test
 	void desactivarItemPersiste() {
-		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-Y", "Y", "UN"));
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-Y", "Y", "UN", null));
 		stockService.desactivarItem(item.getId());
 		assertFalse(itemRepository.findById(item.getId()).orElseThrow().isActivo());
+	}
+
+	@Test
+	void reactivarItemPersiste() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-RX", "Rx", "UN", null));
+		stockService.desactivarItem(item.getId());
+		assertFalse(itemRepository.findById(item.getId()).orElseThrow().isActivo());
+
+		stockService.reactivarItem(item.getId());
+
+		assertTrue(itemRepository.findById(item.getId()).orElseThrow().isActivo());
+	}
+
+	@Test
+	void actualizarItemCambiaNombreYUnidad() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MOD", "Original", "UN", null));
+
+		Item actualizado = stockService.actualizarItem(new GestionarItem.ActualizarItemCommand(
+				item.getId(), "Modificado", "KG", null));
+
+		assertEquals("Modificado", actualizado.getNombre());
+		assertEquals("KG", actualizado.getUnidadMedida());
+		assertEquals("SKU-MOD", actualizado.getSku());
+	}
+
+	@Test
+	void actualizarItemConDatosInvalidosOInexistenteLanza() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MOD2", "Original", "UN", null));
+
+		assertThrows(BusinessException.class, () -> stockService.actualizarItem(
+				new GestionarItem.ActualizarItemCommand(item.getId(), "  ", "UN", null)));
+		assertThrows(NotFoundException.class, () -> stockService.actualizarItem(
+				new GestionarItem.ActualizarItemCommand(999L, "X", "UN", null)));
+	}
+
+	@Test
+	void crearItemConStockMinimoPersiste() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MIN", "Min", "UN", new BigDecimal("20.000")));
+		assertEquals(0, new BigDecimal("20.000").compareTo(item.getStockMinimo()));
+	}
+
+	@Test
+	void stockMinimoNegativoLanzaBusinessException() {
+		assertThrows(BusinessException.class, () -> stockService.crearItem(
+				new GestionarItem.CrearItemCommand("SKU-MINN", "Min", "UN", new BigDecimal("-1.000"))));
+	}
+
+	@Test
+	void actualizarItemCambiaStockMinimo() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MIN2", "Min", "UN", null));
+		Item actualizado = stockService.actualizarItem(new GestionarItem.ActualizarItemCommand(
+				item.getId(), "Min2", "UN", new BigDecimal("15.000")));
+		assertEquals(0, new BigDecimal("15.000").compareTo(actualizado.getStockMinimo()));
+	}
+
+	@Test
+	void lotesPorVencerDevuelveSoloLosProximos() {
+		LocalDate hoy = LocalDate.now();
+		loteRepository.save(new Lote(1L, "L-VENCE", hoy, hoy.plusDays(10), new BigDecimal("5.000")));
+		loteRepository.save(new Lote(1L, "L-VENCIDO", hoy, hoy.minusDays(3), new BigDecimal("5.000")));
+		loteRepository.save(new Lote(1L, "L-LEJOS", hoy, hoy.plusDays(90), new BigDecimal("5.000")));
+
+		List<Lote> resultado = stockService.listarLotesPorVencer(30);
+
+		assertEquals(2, resultado.size());
 	}
 
 	private static class FakeItemRepository implements ItemRepository {
@@ -201,6 +268,13 @@ class StockServiceTest {
 		@Override
 		public List<Lote> findByItemId(Long itemId) {
 			return datos.values().stream().filter(l -> l.getItemId().equals(itemId)).toList();
+		}
+
+		@Override
+		public List<Lote> findByFechaVencimientoNotNullAndFechaVencimientoLessThanEqual(LocalDate fecha) {
+			return datos.values().stream()
+					.filter(l -> l.getFechaVencimiento() != null && !l.getFechaVencimiento().isAfter(fecha))
+					.toList();
 		}
 	}
 

@@ -5,6 +5,7 @@ import com.sistema.cliente.adapter.in.web.dto.ZonaResponse;
 import com.sistema.cliente.port.in.GestionarZona;
 import com.sistema.common.model.Zona;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,7 +28,7 @@ public class ZonaController {
 	}
 
 	@PostMapping
-	public ResponseEntity<ZonaResponse> crear(@RequestBody ZonaRequest request) {
+	public ResponseEntity<ZonaResponse> crear(@Valid @RequestBody ZonaRequest request) {
 		Zona zona = gestionarZona.crearZona(new GestionarZona.CrearZonaCommand(request.nombre()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(ZonaResponse.from(zona));
 	}

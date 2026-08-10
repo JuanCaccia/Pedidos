@@ -21,4 +21,6 @@ public interface ConsultarStock {
 	List<MovimientoStock> listarMovimientos(Long itemId);
 
 	List<Lote> listarLotes(Long itemId);
+
+	List<Lote> listarLotesPorVencer(int dias);
 }

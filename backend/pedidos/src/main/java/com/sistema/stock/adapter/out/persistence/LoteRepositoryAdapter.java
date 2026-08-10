@@ -4,6 +4,7 @@ import com.sistema.stock.model.Lote;
 import com.sistema.stock.port.out.LoteRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,5 +33,12 @@ public class LoteRepositoryAdapter implements LoteRepository {
 	@Override
 	public List<Lote> findByItemId(Long itemId) {
 		return jpaRepository.findByItemId(itemId).stream().map(mapper::toDomain).toList();
+	}
+
+	@Override
+	public List<Lote> findByFechaVencimientoNotNullAndFechaVencimientoLessThanEqual(LocalDate fecha) {
+		return jpaRepository.findByFechaVencimientoNotNullAndFechaVencimientoLessThanEqual(fecha).stream()
+				.map(mapper::toDomain)
+				.toList();
 	}
 }

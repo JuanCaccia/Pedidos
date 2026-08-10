@@ -1,0 +1,5 @@
+target/
+.mvn/
+.vscode/
+*.md
+.git

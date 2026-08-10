@@ -22,12 +22,12 @@ public class AuthService {
 
 	public LoginResultado login(String email, String password) {
 		Usuario usuario = consultarUsuario.buscarPorEmail(email)
-				.orElseThrow(() -> new BusinessException("AUTH_INVALIDO", "Credenciales invalidas"));
+				.orElseThrow(() -> new BusinessException("AUTH_INVALIDO", "Credenciales inválidas"));
 		if (!usuario.isActivo()) {
 			throw new BusinessException("AUTH_INACTIVO", "Usuario desactivado");
 		}
 		if (!passwordEncoder.matches(password, usuario.getPasswordHash())) {
-			throw new BusinessException("AUTH_INVALIDO", "Credenciales invalidas");
+			throw new BusinessException("AUTH_INVALIDO", "Credenciales inválidas");
 		}
 		String token = jwtService.generarToken(usuario.getId(), usuario.getEmail(),
 				usuario.getRoles().stream().map(Enum::name).toList());

@@ -58,6 +58,20 @@ class PedidoServiceTest {
 	}
 
 	@Test
+	void listarPaginadoDivideEnPaginas() {
+		for (int i = 0; i < 3; i++) {
+			crearPedido(10L + i, new BigDecimal("1.000"));
+		}
+		com.sistema.common.model.PageResponse<Pedido> pagina0 = pedidoService.listarPaginado(null, null, null, 0, 2);
+		com.sistema.common.model.PageResponse<Pedido> pagina1 = pedidoService.listarPaginado(null, null, null, 1, 2);
+
+		assertEquals(2, pagina0.content().size());
+		assertEquals(1, pagina1.content().size());
+		assertEquals(3, pagina0.totalElements());
+		assertEquals(2, pagina0.totalPages());
+	}
+
+	@Test
 	void crearPedidoPersisteConLineaYTotal() {
 		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
 
@@ -87,7 +101,7 @@ class PedidoServiceTest {
 
 		Pedido confirmado = pedidoService.confirmarPedido(pedido.getId());
 
-		assertEquals(EstadoPedido.PENDIENTE_PREPARACION, confirmado.getEstado());
+		assertEquals(EstadoPedido.PENDIENTE_STOCK, confirmado.getEstado());
 		assertEquals(0, new BigDecimal("6.000").compareTo(confirmado.getItems().get(0).getCantidadReservada()));
 		assertTrue(confirmado.getItems().get(0).isPendienteStock());
 		assertEquals(0, BigDecimal.ZERO.compareTo(stockGateway.disponible.get(10L)));
@@ -219,6 +233,7 @@ class PedidoServiceTest {
 
 		Pedido modificado = pedidoService.agregarUnidades(pedido.getId(), 10L, new BigDecimal("4.000"));
 
+		assertEquals(EstadoPedido.PENDIENTE_PREPARACION, modificado.getEstado());
 		assertFalse(modificado.getItems().get(0).isPendienteStock());
 		assertEquals(0, new BigDecimal("10.000").compareTo(modificado.getItems().get(0).getCantidadReservada()));
 		assertEquals(0, BigDecimal.ZERO.compareTo(stockGateway.disponible.get(10L)));
@@ -236,6 +251,78 @@ class PedidoServiceTest {
 		Pedido pedido2 = crearPedido(11L, new BigDecimal("10.000"));
 		pedidoService.confirmarPedido(pedido2.getId());
 		assertThrows(BusinessException.class, () -> pedidoService.agregarUnidades(pedido2.getId(), 11L, new BigDecimal("5.000")));
+	}
+
+	@Test
+	void despacharPasaDePreparacionAEntrega() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+
+		Pedido despachado = pedidoService.despachar(pedido.getId());
+
+		assertEquals(EstadoPedido.PENDIENTE_ENTREGA, despachado.getEstado());
+	}
+
+	@Test
+	void despacharDesdeOtroEstadoLanzaBusinessException() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+
+		assertThrows(BusinessException.class, () -> pedidoService.despachar(pedido.getId()));
+	}
+
+	@Test
+	void reAgendarDesdeEnViaje() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+		pedido.setEstado(EstadoPedido.EN_VIAJE);
+		pedidoRepository.save(pedido);
+
+		Pedido reagendado = pedidoService.reAgendar(pedido.getId());
+
+		assertEquals(EstadoPedido.RE_AGENDADO, reagendado.getEstado());
+		assertTrue(stockGateway.operaciones.stream().noneMatch(o -> o.startsWith("LIBERACION:")));
+	}
+
+	@Test
+	void rechazarDesdeEnViajeLiberaTodaLaReserva() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+		pedido.setEstado(EstadoPedido.EN_VIAJE);
+		pedidoRepository.save(pedido);
+
+		pedidoService.rechazarPedido(pedido.getId());
+
+		Pedido recargado = pedidoRepository.findById(pedido.getId()).orElseThrow();
+		assertEquals(EstadoPedido.RECHAZADO, recargado.getEstado());
+		assertTrue(stockGateway.operaciones.stream().anyMatch(o -> o.startsWith("LIBERACION:")));
+		assertEquals(0, new BigDecimal("100.000").compareTo(stockGateway.disponible.get(10L)));
+	}
+
+	@Test
+	void asignarARutaYaNoAceptaPreparacion() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+
+		assertThrows(BusinessException.class, () -> pedidoService.asignarARuta(pedido.getId()));
+	}
+
+	@Test
+	void asignarARutaDesdeReAgendadoVuelveAEntrega() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+		pedido.setEstado(EstadoPedido.PENDIENTE_ENTREGA);
+		pedidoRepository.save(pedido);
+		pedidoService.reAgendar(pedido.getId());
+
+		Pedido asignado = pedidoService.asignarARuta(pedido.getId());
+
+		assertEquals(EstadoPedido.PENDIENTE_ENTREGA, asignado.getEstado());
 	}
 
 	private static class FakePedidoRepository implements PedidoRepository {

@@ -1,4 +1,6 @@
 package com.sistema.usuario.adapter.in.web.dto;
 
-public record LoginRequest(String email, String password) {
+import jakarta.validation.constraints.*;
+
+public record LoginRequest(@NotBlank String email, @NotBlank String password) {
 }

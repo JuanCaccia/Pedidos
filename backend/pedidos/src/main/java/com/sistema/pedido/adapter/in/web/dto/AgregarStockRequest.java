@@ -1,6 +1,8 @@
 package com.sistema.pedido.adapter.in.web.dto;
 
+import jakarta.validation.constraints.*;
+
 import java.math.BigDecimal;
 
-public record AgregarStockRequest(Long itemId, BigDecimal cantidad) {
+public record AgregarStockRequest(@NotNull Long itemId, @NotNull @Positive BigDecimal cantidad) {
 }

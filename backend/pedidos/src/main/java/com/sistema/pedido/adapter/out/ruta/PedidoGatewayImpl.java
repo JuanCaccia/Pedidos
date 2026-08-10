@@ -32,7 +32,7 @@ public class PedidoGatewayImpl implements PedidoGateway {
 	@Override
 	public boolean estaDisponibleParaRuta(Long pedidoId) {
 		return consultarPedido.buscarPorId(pedidoId)
-				.map(p -> p.getEstado() == EstadoPedido.PENDIENTE_PREPARACION
+				.map(p -> p.getEstado() == EstadoPedido.PENDIENTE_ENTREGA
 						|| p.getEstado() == EstadoPedido.RE_AGENDADO)
 				.orElse(false);
 	}

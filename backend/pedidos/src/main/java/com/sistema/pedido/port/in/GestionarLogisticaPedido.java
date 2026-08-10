@@ -6,5 +6,7 @@ public interface GestionarLogisticaPedido {
 
 	Pedido asignarARuta(Long pedidoId);
 
+	Pedido despachar(Long pedidoId);
+
 	Pedido iniciarViaje(Long pedidoId);
 }

@@ -7,7 +7,9 @@ import com.sistema.ruta.model.EstadoRuta;
 import com.sistema.ruta.model.Ruta;
 import com.sistema.ruta.port.in.ConsultarRuta;
 import com.sistema.ruta.port.in.GestionarRuta;
+import com.sistema.common.exception.NotFoundException;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,14 +37,14 @@ public class RutaController {
 	}
 
 	@PostMapping
-	public ResponseEntity<RutaResponse> crear(@RequestBody RutaRequest request) {
+	public ResponseEntity<RutaResponse> crear(@Valid @RequestBody RutaRequest request) {
 		Ruta ruta = gestionarRuta.crearRuta(new GestionarRuta.CrearRutaCommand(request.zonaId(),
 				request.repartidorId(), request.fechaJornada(), request.pedidoIds()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(RutaResponse.from(ruta));
 	}
 
 	@PostMapping("/{id}/pedidos")
-	public ResponseEntity<RutaResponse> asignarPedidos(@PathVariable Long id, @RequestBody AsignarPedidosRequest request) {
+	public ResponseEntity<RutaResponse> asignarPedidos(@PathVariable Long id, @Valid @RequestBody AsignarPedidosRequest request) {
 		Ruta ruta = gestionarRuta.asignarPedidos(id, request.pedidoIds());
 		return ResponseEntity.ok(RutaResponse.from(ruta));
 	}
@@ -81,9 +83,8 @@ public class RutaController {
 
 	@GetMapping("/{id}")
 	public ResponseEntity<RutaResponse> buscarPorId(@PathVariable Long id) {
-		return consultarRuta.buscarPorId(id)
-				.map(RutaResponse::from)
-				.map(ResponseEntity::ok)
-				.orElse(ResponseEntity.notFound().build());
+		Ruta ruta = consultarRuta.buscarPorId(id)
+				.orElseThrow(() -> new NotFoundException("Ruta no encontrada: " + id));
+		return ResponseEntity.ok(RutaResponse.from(ruta));
 	}
 }

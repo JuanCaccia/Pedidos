@@ -13,6 +13,9 @@ public interface GestionarUsuario {
 	record AsignarRolesCommand(Long usuarioId, Set<Rol> roles) {
 	}
 
+	record CambiarPasswordCommand(Long usuarioId, String nuevaPassword, com.sistema.usuario.model.Usuario actor) {
+	}
+
 	Usuario crearUsuario(CrearUsuarioCommand command);
 
 	void asignarRoles(AsignarRolesCommand command);
@@ -20,4 +23,6 @@ public interface GestionarUsuario {
 	void desactivarUsuario(Long usuarioId);
 
 	void reactivarUsuario(Long usuarioId);
+
+	void cambiarPassword(CambiarPasswordCommand command);
 }

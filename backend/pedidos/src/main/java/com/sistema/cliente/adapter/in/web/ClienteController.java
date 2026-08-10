@@ -6,7 +6,10 @@ import com.sistema.cliente.adapter.in.web.dto.ClienteResponse;
 import com.sistema.cliente.model.Cliente;
 import com.sistema.cliente.port.in.ConsultarCliente;
 import com.sistema.cliente.port.in.GestionarCliente;
+import com.sistema.common.exception.NotFoundException;
+import com.sistema.common.model.PageResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,8 +21,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/clientes")
@@ -35,7 +36,7 @@ public class ClienteController {
 	}
 
 	@PostMapping
-	public ResponseEntity<ClienteResponse> crear(@RequestBody ClienteRequest request) {
+	public ResponseEntity<ClienteResponse> crear(@Valid @RequestBody ClienteRequest request) {
 		Cliente cliente = gestionarCliente.crearCliente(new GestionarCliente.CrearClienteCommand(
 				request.razonSocial(), request.cuit(), request.email(), request.telefono(),
 				request.domicilio(), request.zonaId()));
@@ -43,7 +44,7 @@ public class ClienteController {
 	}
 
 	@PutMapping("/{id}")
-	public ResponseEntity<ClienteResponse> actualizar(@PathVariable Long id, @RequestBody ActualizarClienteRequest request) {
+	public ResponseEntity<ClienteResponse> actualizar(@PathVariable Long id, @Valid @RequestBody ActualizarClienteRequest request) {
 		Cliente cliente = gestionarCliente.actualizarCliente(new GestionarCliente.ActualizarClienteCommand(
 				id, request.razonSocial(), request.email(), request.telefono(), request.domicilio(), request.zonaId()));
 		return ResponseEntity.ok(ClienteResponse.from(cliente));
@@ -63,25 +64,23 @@ public class ClienteController {
 
 	@GetMapping("/{id}")
 	public ResponseEntity<ClienteResponse> buscarPorId(@PathVariable Long id) {
-		return consultarCliente.buscarPorId(id)
-				.map(ClienteResponse::from)
-				.map(ResponseEntity::ok)
-				.orElse(ResponseEntity.notFound().build());
+		Cliente cliente = consultarCliente.buscarPorId(id)
+				.orElseThrow(() -> new NotFoundException("Cliente no encontrado: " + id));
+		return ResponseEntity.ok(ClienteResponse.from(cliente));
 	}
 
 	@GetMapping("/buscar/cuit/{cuit}")
 	public ResponseEntity<ClienteResponse> buscarPorCuit(@PathVariable String cuit) {
-		return consultarCliente.buscarPorCuit(cuit)
-				.map(ClienteResponse::from)
-				.map(ResponseEntity::ok)
-				.orElse(ResponseEntity.notFound().build());
+		Cliente cliente = consultarCliente.buscarPorCuit(cuit)
+				.orElseThrow(() -> new NotFoundException("Cliente no encontrado: " + cuit));
+		return ResponseEntity.ok(ClienteResponse.from(cliente));
 	}
 
 	@GetMapping
-	public List<ClienteResponse> listar(@RequestParam(required = false) Long zonaId) {
-		List<Cliente> clientes = zonaId == null
-				? consultarCliente.listarTodos()
-				: consultarCliente.listarPorZona(zonaId);
-		return clientes.stream().map(ClienteResponse::from).toList();
+	public PageResponse<ClienteResponse> listar(@RequestParam(required = false) Long zonaId,
+			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+		PageResponse<Cliente> pagina = consultarCliente.listarPaginado(zonaId, page, size);
+		return new PageResponse<>(pagina.content().stream().map(ClienteResponse::from).toList(),
+				pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages());
 	}
 }

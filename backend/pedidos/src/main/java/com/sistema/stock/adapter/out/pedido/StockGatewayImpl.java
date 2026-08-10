@@ -43,11 +43,11 @@ public class StockGatewayImpl implements StockGateway {
 	public void reservar(Long itemId, Long pedidoId, BigDecimal cantidad) {
 		// Bloqueo pesimista: serializa reservas concurrentes sobre el mismo item
 		itemJpaRepository.findByIdParaActualizar(itemId)
-				.orElseThrow(() -> new NotFoundException("Item not found: " + itemId));
+				.orElseThrow(() -> new NotFoundException("Item no encontrado: " + itemId));
 		BigDecimal disponible = stockService.obtenerDisponible(itemId);
 		if (disponible.compareTo(cantidad) < 0) {
 			throw new BusinessException("STOCK_INSUFICIENTE",
-					"Not enough available stock to reserve " + cantidad + " for item " + itemId);
+					"No hay stock disponible suficiente para reservar " + cantidad + " del item " + itemId);
 		}
 		movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.RESERVA_PEDIDO, itemId, null, pedidoId,
 				cantidad, LocalDateTime.now(), "Reserva por pedido " + pedidoId));
@@ -57,13 +57,13 @@ public class StockGatewayImpl implements StockGateway {
 	@Transactional
 	public void liberarReserva(Long itemId, Long pedidoId, BigDecimal cantidad) {
 		movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.LIBERACION_RESERVA, itemId, null, pedidoId,
-				cantidad, LocalDateTime.now(), "Liberacion de reserva pedido " + pedidoId));
+				cantidad, LocalDateTime.now(), "Liberación de reserva del pedido " + pedidoId));
 	}
 
 	@Override
 	@Transactional
 	public void egresar(Long itemId, Long pedidoId, BigDecimal cantidad) {
 		movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.EGRESO_VENTA, itemId, null, pedidoId,
-				cantidad, LocalDateTime.now(), "Egreso por venta pedido " + pedidoId));
+				cantidad, LocalDateTime.now(), "Egreso por venta del pedido " + pedidoId));
 	}
 }

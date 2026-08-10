@@ -5,6 +5,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "item")
 public class ItemJpaEntity extends BaseEntity {
@@ -20,6 +22,9 @@ public class ItemJpaEntity extends BaseEntity {
 
 	@Column(nullable = false)
 	private boolean activo = true;
+
+	@Column(name = "stock_minimo", nullable = false, precision = 12, scale = 3)
+	private BigDecimal stockMinimo = BigDecimal.ZERO;
 
 	protected ItemJpaEntity() {
 		// required by JPA
@@ -61,5 +66,13 @@ public class ItemJpaEntity extends BaseEntity {
 
 	public void setActivo(boolean activo) {
 		this.activo = activo;
+	}
+
+	public BigDecimal getStockMinimo() {
+		return stockMinimo;
+	}
+
+	public void setStockMinimo(BigDecimal stockMinimo) {
+		this.stockMinimo = stockMinimo;
 	}
 }

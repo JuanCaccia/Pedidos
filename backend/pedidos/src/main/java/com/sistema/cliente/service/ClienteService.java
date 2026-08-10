@@ -7,6 +7,7 @@ import com.sistema.cliente.port.out.ClienteRepository;
 import com.sistema.cliente.port.out.ZonaRepository;
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
+import com.sistema.common.model.PageResponse;
 import com.sistema.common.model.Zona;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +33,7 @@ public class ClienteService implements GestionarCliente, ConsultarCliente {
 		validarDatosBasicos(command.razonSocial(), command.cuit());
 		String cuit = command.cuit().trim();
 		clienteRepository.findByCuit(cuit).ifPresent(c -> {
-			throw new BusinessException("CLIENTE_CUIT_DUPLICADO", "A client with that CUIT already exists");
+			throw new BusinessException("CLIENTE_CUIT_DUPLICADO", "Ya existe un cliente con ese CUIT");
 		});
 		Zona zona = obtenerZonaO404(command.zonaId());
 		Cliente cliente = new Cliente(command.razonSocial().trim(), cuit, zona);
@@ -87,22 +88,38 @@ public class ClienteService implements GestionarCliente, ConsultarCliente {
 		return clienteRepository.findByZonaId(zonaId);
 	}
 
+	@Override
+	public PageResponse<Cliente> listarPaginado(Long zonaId, int page, int size) {
+		List<Cliente> todos = zonaId == null
+				? clienteRepository.findAll()
+				: clienteRepository.findByZonaId(zonaId);
+		return paginar(todos, page, size);
+	}
+
+	private <T> PageResponse<T> paginar(List<T> todos, int page, int size) {
+		int total = todos.size();
+		int from = Math.min(page * size, total);
+		int to = Math.min(from + size, total);
+		int totalPages = size == 0 ? 0 : (total + size - 1) / size;
+		return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
+	}
+
 	private Cliente obtenerClienteO404(Long clienteId) {
 		return clienteRepository.findById(clienteId)
-				.orElseThrow(() -> new NotFoundException("Client not found: " + clienteId));
+				.orElseThrow(() -> new NotFoundException("Cliente no encontrado: " + clienteId));
 	}
 
 	private Zona obtenerZonaO404(Long zonaId) {
 		return zonaRepository.findById(zonaId)
-				.orElseThrow(() -> new NotFoundException("Zone not found: " + zonaId));
+				.orElseThrow(() -> new NotFoundException("Zona no encontrada: " + zonaId));
 	}
 
 	private void validarDatosBasicos(String razonSocial, String cuit) {
 		if (razonSocial == null || razonSocial.isBlank()) {
-			throw new BusinessException("VALIDATION_ERROR", "Business name is required");
+			throw new BusinessException("VALIDATION_ERROR", "La razón social es obligatoria");
 		}
 		if (cuit == null || !cuit.trim().matches("^\\d{11}$")) {
-			throw new BusinessException("VALIDATION_ERROR", "CUIT must be exactly 11 digits");
+			throw new BusinessException("VALIDATION_ERROR", "El CUIT debe tener exactamente 11 dígitos");
 		}
 	}
 }

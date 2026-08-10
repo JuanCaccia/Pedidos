@@ -1,5 +1,6 @@
 package com.sistema.pedido.port.in;
 
+import com.sistema.common.model.PageResponse;
 import com.sistema.pedido.model.EstadoPedido;
 import com.sistema.pedido.model.Pedido;
 
@@ -19,4 +20,6 @@ public interface ConsultarPedido {
 	List<Pedido> listarPorVendedor(Long vendedorId);
 
 	List<Pedido> listarHijosDe(Long pedidoPadreId);
+
+	PageResponse<Pedido> listarPaginado(EstadoPedido estado, Long clienteId, Long vendedorId, int page, int size);
 }

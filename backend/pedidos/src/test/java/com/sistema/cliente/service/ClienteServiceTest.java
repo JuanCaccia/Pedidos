@@ -38,6 +38,19 @@ class ClienteServiceTest {
 	}
 
 	@Test
+	void listarPaginadoDivideEnPaginas() {
+		clienteService.crearCliente(new GestionarCliente.CrearClienteCommand("A S.A.", "20111111111", null, null, null, 1L));
+		clienteService.crearCliente(new GestionarCliente.CrearClienteCommand("B S.A.", "20222222222", null, null, null, 1L));
+		clienteService.crearCliente(new GestionarCliente.CrearClienteCommand("C S.A.", "20333333333", null, null, null, 1L));
+
+		com.sistema.common.model.PageResponse<com.sistema.cliente.model.Cliente> pagina = clienteService.listarPaginado(null, 0, 2);
+
+		assertEquals(2, pagina.content().size());
+		assertEquals(3, pagina.totalElements());
+		assertEquals(2, pagina.totalPages());
+	}
+
+	@Test
 	void crearClienteConZonaValidaPersiste() {
 		Cliente cliente = clienteService.crearCliente(new GestionarCliente.CrearClienteCommand(
 				"Empresa S.A.", "20123456789", "a@b.com", "555-1234", "Calle 1", 1L));

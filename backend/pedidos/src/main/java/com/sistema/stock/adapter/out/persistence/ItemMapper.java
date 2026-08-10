@@ -8,6 +8,7 @@ public class ItemMapper {
 		Item item = new Item(entity.getSku(), entity.getNombre(), entity.getUnidadMedida());
 		item.setId(entity.getId());
 		item.setActivo(entity.isActivo());
+		item.setStockMinimo(entity.getStockMinimo());
 		return item;
 	}
 
@@ -17,6 +18,7 @@ public class ItemMapper {
 			entity.setId(item.getId());
 		}
 		entity.setActivo(item.isActivo());
+		entity.setStockMinimo(item.getStockMinimo());
 		return entity;
 	}
 }

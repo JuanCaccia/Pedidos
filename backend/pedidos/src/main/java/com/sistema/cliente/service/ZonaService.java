@@ -24,11 +24,11 @@ public class ZonaService implements GestionarZona {
 	@Transactional
 	public Zona crearZona(CrearZonaCommand command) {
 		if (command.nombre() == null || command.nombre().isBlank()) {
-			throw new BusinessException("VALIDATION_ERROR", "Zone name is required");
+			throw new BusinessException("VALIDATION_ERROR", "El nombre de la zona es obligatorio");
 		}
 		String nombre = command.nombre().trim();
 		zonaRepository.findByNombre(nombre).ifPresent(z -> {
-			throw new BusinessException("ZONA_NOMBRE_DUPLICADO", "A zone with that name already exists");
+			throw new BusinessException("ZONA_NOMBRE_DUPLICADO", "Ya existe una zona con ese nombre");
 		});
 		return zonaRepository.save(new Zona(nombre));
 	}

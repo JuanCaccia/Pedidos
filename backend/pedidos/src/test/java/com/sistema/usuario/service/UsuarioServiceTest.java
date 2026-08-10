@@ -78,6 +78,52 @@ class UsuarioServiceTest {
 		assertThrows(NotFoundException.class, () -> usuarioService.desactivarUsuario(999L));
 	}
 
+	@Test
+	void cambiarPropiaPasswordActualizaHash() {
+		Usuario usuario = usuarioService.crearUsuario(new GestionarUsuario.CrearUsuarioCommand(
+				"Propio", "propio@test.com", "123456", Set.of(Rol.VENDEDOR)));
+		org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder encoder = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
+
+		usuarioService.cambiarPassword(new GestionarUsuario.CambiarPasswordCommand(
+				usuario.getId(), "nueva123", usuario));
+
+		Usuario recargado = repository.findById(usuario.getId()).orElseThrow();
+		assertTrue(encoder.matches("nueva123", recargado.getPasswordHash()));
+	}
+
+	@Test
+	void cambiarPasswordAjenoSinAdminLanzaBusinessException() {
+		Usuario admin = usuarioService.crearUsuario(new GestionarUsuario.CrearUsuarioCommand(
+				"Admin", "admin2@test.com", "123456", Set.of(Rol.ADMINISTRATIVO)));
+		Usuario victima = usuarioService.crearUsuario(new GestionarUsuario.CrearUsuarioCommand(
+				"Victima", "victima@test.com", "123456", Set.of(Rol.VENDEDOR)));
+
+		assertThrows(BusinessException.class, () -> usuarioService.cambiarPassword(
+				new GestionarUsuario.CambiarPasswordCommand(admin.getId(), "nueva123", victima)));
+	}
+
+	@Test
+	void cambiarPasswordAjenoConAdminOk() {
+		Usuario admin = usuarioService.crearUsuario(new GestionarUsuario.CrearUsuarioCommand(
+				"Admin", "admin3@test.com", "123456", Set.of(Rol.ADMINISTRATIVO)));
+		Usuario victima = usuarioService.crearUsuario(new GestionarUsuario.CrearUsuarioCommand(
+				"Victima", "victima2@test.com", "123456", Set.of(Rol.VENDEDOR)));
+
+		usuarioService.cambiarPassword(new GestionarUsuario.CambiarPasswordCommand(
+				victima.getId(), "nueva123", admin));
+
+		assertTrue(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().matches("nueva123",
+				repository.findById(victima.getId()).orElseThrow().getPasswordHash()));
+	}
+
+	@Test
+	void cambiarPasswordCortaLanzaBusinessException() {
+		Usuario usuario = usuarioService.crearUsuario(new GestionarUsuario.CrearUsuarioCommand(
+				"Propio", "propio2@test.com", "123456", Set.of(Rol.VENDEDOR)));
+		assertThrows(BusinessException.class, () -> usuarioService.cambiarPassword(
+				new GestionarUsuario.CambiarPasswordCommand(usuario.getId(), "123", usuario)));
+	}
+
 	private static class FakeUsuarioRepository implements UsuarioRepository {
 
 		private final Map<Long, Usuario> datos = new HashMap<>();

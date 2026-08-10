@@ -5,6 +5,7 @@ import com.sistema.usuario.adapter.in.web.dto.LoginResponse;
 import com.sistema.usuario.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,7 +25,7 @@ public class AuthController {
 
 	@PostMapping("/login")
 	@Operation(summary = "Autentica un usuario y devuelve un token JWT")
-	public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+	public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
 		AuthService.LoginResultado resultado = authService.login(request.email(), request.password());
 		return ResponseEntity.ok(LoginResponse.of(resultado.token(), resultado.usuario()));
 	}

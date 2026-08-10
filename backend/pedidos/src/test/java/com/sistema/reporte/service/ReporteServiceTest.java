@@ -1,5 +1,6 @@
 package com.sistema.reporte.service;
 
+import com.sistema.common.model.PageResponse;
 import com.sistema.pedido.model.EstadoPedido;
 import com.sistema.pedido.model.Pedido;
 import com.sistema.pedido.model.PedidoItem;
@@ -171,6 +172,11 @@ class ReporteServiceTest {
 		public List<com.sistema.stock.model.Lote> listarLotes(Long itemId) {
 			return List.of();
 		}
+
+		@Override
+		public List<com.sistema.stock.model.Lote> listarLotesPorVencer(int dias) {
+			return List.of();
+		}
 	}
 
 	private static class FakePedido implements ConsultarPedido {
@@ -204,6 +210,26 @@ class ReporteServiceTest {
 		@Override
 		public List<Pedido> listarHijosDe(Long pedidoPadreId) {
 			return pedidos.stream().filter(p -> pedidoPadreId.equals(p.getPedidoPadreId())).toList();
+		}
+
+		@Override
+		public PageResponse<Pedido> listarPaginado(EstadoPedido estado, Long clienteId, Long vendedorId,
+				int page, int size) {
+			List<Pedido> todos;
+			if (estado != null) {
+				todos = listarPorEstado(estado);
+			} else if (clienteId != null) {
+				todos = listarPorCliente(clienteId);
+			} else if (vendedorId != null) {
+				todos = listarPorVendedor(vendedorId);
+			} else {
+				todos = listarTodos();
+			}
+			int total = todos.size();
+			int from = Math.min(page * size, total);
+			int to = Math.min(from + size, total);
+			int totalPages = size == 0 ? 0 : (total + size - 1) / size;
+			return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
 		}
 	}
 

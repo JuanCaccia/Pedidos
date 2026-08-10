@@ -1,6 +1,7 @@
 package com.sistema.cliente.port.in;
 
 import com.sistema.cliente.model.Cliente;
+import com.sistema.common.model.PageResponse;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,4 +15,6 @@ public interface ConsultarCliente {
 	List<Cliente> listarTodos();
 
 	List<Cliente> listarPorZona(Long zonaId);
+
+	PageResponse<Cliente> listarPaginado(Long zonaId, int page, int size);
 }

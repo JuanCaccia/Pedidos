@@ -1,4 +1,9 @@
 package com.sistema.stock.adapter.in.web.dto;
 
-public record ItemRequest(String sku, String nombre, String unidadMedida) {
+import jakarta.validation.constraints.*;
+
+import java.math.BigDecimal;
+
+public record ItemRequest(@NotBlank String sku, @NotBlank String nombre, @NotBlank String unidadMedida,
+		BigDecimal stockMinimo) {
 }

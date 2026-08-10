@@ -44,19 +44,45 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	@Transactional
 	public Item crearItem(CrearItemCommand command) {
 		if (command.sku() == null || command.sku().isBlank()) {
-			throw new BusinessException("VALIDATION_ERROR", "SKU is required");
+			throw new BusinessException("VALIDATION_ERROR", "El SKU es obligatorio");
 		}
 		if (command.nombre() == null || command.nombre().isBlank()) {
-			throw new BusinessException("VALIDATION_ERROR", "Item name is required");
+			throw new BusinessException("VALIDATION_ERROR", "El nombre del item es obligatorio");
 		}
 		if (command.unidadMedida() == null || command.unidadMedida().isBlank()) {
-			throw new BusinessException("VALIDATION_ERROR", "Unit of measure is required");
+			throw new BusinessException("VALIDATION_ERROR", "La unidad de medida es obligatoria");
 		}
 		String sku = command.sku().trim().toUpperCase();
 		itemRepository.findBySku(sku).ifPresent(i -> {
-			throw new BusinessException("ITEM_SKU_DUPLICADO", "An item with that SKU already exists");
+			throw new BusinessException("ITEM_SKU_DUPLICADO", "Ya existe un item con ese SKU");
 		});
-		return itemRepository.save(new Item(sku, command.nombre().trim(), command.unidadMedida().trim()));
+		BigDecimal minimo = command.stockMinimo() == null ? BigDecimal.ZERO : command.stockMinimo();
+		if (minimo.signum() < 0) {
+			throw new BusinessException("VALIDATION_ERROR", "El stock mínimo debe ser mayor o igual a cero");
+		}
+		Item item = new Item(sku, command.nombre().trim(), command.unidadMedida().trim());
+		item.setStockMinimo(minimo);
+		return itemRepository.save(item);
+	}
+
+	@Override
+	@Transactional
+	public Item actualizarItem(ActualizarItemCommand command) {
+		Item item = obtenerItemO404(command.itemId());
+		if (command.nombre() == null || command.nombre().isBlank()) {
+			throw new BusinessException("VALIDATION_ERROR", "El nombre del item es obligatorio");
+		}
+		if (command.unidadMedida() == null || command.unidadMedida().isBlank()) {
+			throw new BusinessException("VALIDATION_ERROR", "La unidad de medida es obligatoria");
+		}
+		BigDecimal minimo = command.stockMinimo() == null ? BigDecimal.ZERO : command.stockMinimo();
+		if (minimo.signum() < 0) {
+			throw new BusinessException("VALIDATION_ERROR", "El stock mínimo debe ser mayor o igual a cero");
+		}
+		item.setNombre(command.nombre().trim());
+		item.setUnidadMedida(command.unidadMedida().trim());
+		item.setStockMinimo(minimo);
+		return itemRepository.save(item);
 	}
 
 	@Override
@@ -64,6 +90,14 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	public void desactivarItem(Long itemId) {
 		Item item = obtenerItemO404(itemId);
 		item.desactivar();
+		itemRepository.save(item);
+	}
+
+	@Override
+	@Transactional
+	public void reactivarItem(Long itemId) {
+		Item item = obtenerItemO404(itemId);
+		item.setActivo(true);
 		itemRepository.save(item);
 	}
 
@@ -96,15 +130,15 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		Item item = obtenerItemO404(command.itemId());
 		validarCantidadPositiva(command.cantidad());
 		Lote lote = loteRepository.findById(command.loteId())
-				.orElseThrow(() -> new NotFoundException("Batch not found: " + command.loteId()));
+				.orElseThrow(() -> new NotFoundException("Lote no encontrado: " + command.loteId()));
 		if (!lote.getItemId().equals(item.getId())) {
-			throw new BusinessException("MERMA_LOTE_INCOMPATIBLE", "The batch does not belong to that item");
+			throw new BusinessException("MERMA_LOTE_INCOMPATIBLE", "El lote no pertenece a ese item");
 		}
 		if (command.motivo() == null || command.motivo().isBlank()) {
-			throw new BusinessException("VALIDATION_ERROR", "A reason is required for merma");
+			throw new BusinessException("VALIDATION_ERROR", "Se requiere un motivo para la merma");
 		}
 		if (obtenerDisponible(item.getId()).compareTo(command.cantidad()) < 0) {
-			throw new BusinessException("MERMA_SIN_STOCK", "Not enough available stock for the merma");
+			throw new BusinessException("MERMA_SIN_STOCK", "No hay stock disponible suficiente para la merma");
 		}
 		return movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.MERMA, item.getId(), lote.getId(),
 				null, command.cantidad(), LocalDateTime.now(), command.motivo().trim()));
@@ -118,14 +152,14 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	public MovimientoStock ajustarInventario(AjusteInventarioCommand command) {
 		Item item = obtenerItemO404(command.itemId());
 		if (command.cantidad() == null || command.cantidad().signum() == 0) {
-			throw new BusinessException("VALIDATION_ERROR", "Adjustment quantity must be non-zero");
+			throw new BusinessException("VALIDATION_ERROR", "La cantidad del ajuste debe ser distinta de cero");
 		}
 		if (command.motivo() == null || command.motivo().isBlank()) {
-			throw new BusinessException("VALIDATION_ERROR", "A reason is required for inventory adjustment");
+			throw new BusinessException("VALIDATION_ERROR", "Se requiere un motivo para el ajuste de inventario");
 		}
 		BigDecimal disponible = obtenerDisponible(item.getId());
 		if (disponible.add(command.cantidad()).signum() < 0) {
-			throw new BusinessException("AJUSTE_SIN_STOCK", "Adjustment would leave negative stock");
+			throw new BusinessException("AJUSTE_SIN_STOCK", "El ajuste dejaría stock negativo");
 		}
 		return movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.AJUSTE_INVENTARIO, item.getId(),
 				null, null, command.cantidad(), LocalDateTime.now(), command.motivo().trim()));
@@ -190,14 +224,19 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		return loteRepository.findByItemId(itemId);
 	}
 
+	@Override
+	public List<Lote> listarLotesPorVencer(int dias) {
+		return loteRepository.findByFechaVencimientoNotNullAndFechaVencimientoLessThanEqual(LocalDate.now().plusDays(dias));
+	}
+
 	private Item obtenerItemO404(Long itemId) {
 		return itemRepository.findById(itemId)
-				.orElseThrow(() -> new NotFoundException("Item not found: " + itemId));
+				.orElseThrow(() -> new NotFoundException("Item no encontrado: " + itemId));
 	}
 
 	private void validarCantidadPositiva(BigDecimal cantidad) {
 		if (cantidad == null || cantidad.signum() <= 0) {
-			throw new BusinessException("VALIDATION_ERROR", "Quantity must be greater than zero");
+			throw new BusinessException("VALIDATION_ERROR", "La cantidad debe ser mayor que cero");
 		}
 	}
 }

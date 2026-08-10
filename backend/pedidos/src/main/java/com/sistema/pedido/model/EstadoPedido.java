@@ -2,6 +2,7 @@ package com.sistema.pedido.model;
 
 public enum EstadoPedido {
 	PENDIENTE_CONFIRMACION,
+	PENDIENTE_STOCK,
 	PENDIENTE_PREPARACION,
 	PENDIENTE_ENTREGA,
 	EN_VIAJE,

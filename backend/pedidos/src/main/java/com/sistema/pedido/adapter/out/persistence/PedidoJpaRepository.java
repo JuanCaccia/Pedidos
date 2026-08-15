@@ -9,6 +9,8 @@ public interface PedidoJpaRepository extends JpaRepository<PedidoJpaEntity, Long
 
 	List<PedidoJpaEntity> findByEstado(EstadoPedido estado);
 
+	long countByEstado(EstadoPedido estado);
+
 	List<PedidoJpaEntity> findByClienteId(Long clienteId);
 
 	List<PedidoJpaEntity> findByVendedorId(Long vendedorId);

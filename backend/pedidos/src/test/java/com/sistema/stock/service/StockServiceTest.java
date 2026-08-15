@@ -2,6 +2,7 @@ package com.sistema.stock.service;
 
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
+import com.sistema.common.model.PageResponse;
 import com.sistema.stock.model.Item;
 import com.sistema.stock.model.Lote;
 import com.sistema.stock.model.MovimientoStock;
@@ -45,11 +46,25 @@ class StockServiceTest {
 		itemRepository = new FakeItemRepository();
 		loteRepository = new FakeLoteRepository();
 		movimientoRepository = new FakeMovimientoStockRepository();
-		stockService = new StockService(itemRepository, loteRepository, movimientoRepository);
+		stockService = new StockService(itemRepository, loteRepository, movimientoRepository, new BigDecimal("50"));
+	}
+
+	private com.sistema.usuario.model.Usuario adminActor() {
+		com.sistema.usuario.model.Usuario u = new com.sistema.usuario.model.Usuario("Admin", "admin@test.com", "x",
+				java.util.Set.of(com.sistema.usuario.model.Rol.ADMINISTRATIVO));
+		u.setId(1L);
+		return u;
+	}
+
+	private com.sistema.usuario.model.Usuario encargadoActor() {
+		com.sistema.usuario.model.Usuario u = new com.sistema.usuario.model.Usuario("Enc", "enc@test.com", "x",
+				java.util.Set.of(com.sistema.usuario.model.Rol.ENCARGADO_DEPOSITO));
+		u.setId(2L);
+		return u;
 	}
 
 	private Long itemConIngreso(String sku, BigDecimal cantidad) {
-		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand(sku, "Item " + sku, "UN", null));
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand(sku, "Item " + sku, "UN", null, null, null));
 		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "LOTE-" + sku, null, cantidad, "Test"));
 		return item.getId();
 	}
@@ -111,18 +126,31 @@ class StockServiceTest {
 	}
 
 	@Test
-	void mermaMayorAlDisponibleLanzaBusinessException() {
+	void mermaMayorAlStockFisicoDelLoteLanza() {
 		Long itemId = itemConIngreso("G", new BigDecimal("100.000"));
 		Lote lote = loteRepository.findByItemId(itemId).get(0);
 		assertThrows(BusinessException.class, () -> stockService.registrarMerma(
-				new GestionarMerma.RegistrarMermaCommand(itemId, lote.getId(), new BigDecimal("999.000"), "motivo")));
+				new GestionarMerma.RegistrarMermaCommand(itemId, lote.getId(), new BigDecimal("150.000"), "motivo")));
+	}
+
+	@Test
+	void mermaDeStockReservadoPermitida() {
+		Long itemId = itemConIngreso("H2", new BigDecimal("100.000"));
+		Lote lote = loteRepository.findByItemId(itemId).get(0);
+		movimientoRepository.save(new MovimientoStock(TipoMovimiento.RESERVA_PEDIDO, itemId, null, 1L,
+				new BigDecimal("90.000"), LocalDateTime.now(), "reserva"));
+
+		stockService.registrarMerma(new GestionarMerma.RegistrarMermaCommand(itemId, lote.getId(),
+				new BigDecimal("50.000"), "lote dañado"));
+
+		assertEquals(0, new BigDecimal("-40.000").compareTo(stockService.obtenerDisponible(itemId)));
 	}
 
 	@Test
 	void ajusteNegativoReduceDisponible() {
 		Long itemId = itemConIngreso("H", new BigDecimal("100.000"));
 		stockService.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(itemId,
-				new BigDecimal("-10.000"), "Diferencia fisica"));
+				new BigDecimal("-10.000"), "Diferencia fisica", adminActor()));
 
 		assertEquals(0, new BigDecimal("90.000").compareTo(stockService.obtenerDisponible(itemId)));
 	}
@@ -131,29 +159,75 @@ class StockServiceTest {
 	void ajusteInvalidoOLlevaANegativoLanzaBusinessException() {
 		Long itemId = itemConIngreso("I", new BigDecimal("100.000"));
 		assertThrows(BusinessException.class, () -> stockService.ajustarInventario(
-				new AjustarInventario.AjusteInventarioCommand(itemId, BigDecimal.ZERO, "motivo")));
+				new AjustarInventario.AjusteInventarioCommand(itemId, BigDecimal.ZERO, "motivo", adminActor())));
 		assertThrows(BusinessException.class, () -> stockService.ajustarInventario(
-				new AjustarInventario.AjusteInventarioCommand(itemId, new BigDecimal("-999.000"), "  ")));
+				new AjustarInventario.AjusteInventarioCommand(itemId, new BigDecimal("-999.000"), "  ", adminActor())));
+	}
+
+	@Test
+	void ajusteGrandeConEncargadoLanzaBusinessException() {
+		Long itemId = itemConIngreso("I2", new BigDecimal("1000.000"));
+		assertThrows(BusinessException.class, () -> stockService.ajustarInventario(
+				new AjustarInventario.AjusteInventarioCommand(itemId, new BigDecimal("-200.000"), "grande", encargadoActor())));
+	}
+
+	@Test
+	void ajusteGrandeConAdminOk() {
+		Long itemId = itemConIngreso("I3", new BigDecimal("1000.000"));
+		stockService.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(itemId,
+				new BigDecimal("-200.000"), "grande", adminActor()));
+		assertEquals(0, new BigDecimal("800.000").compareTo(stockService.obtenerDisponible(itemId)));
+	}
+
+	@Test
+	void ajusteChicoConEncargadoOk() {
+		Long itemId = itemConIngreso("I4", new BigDecimal("1000.000"));
+		stockService.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(itemId,
+				new BigDecimal("-10.000"), "chico", encargadoActor()));
+		assertEquals(0, new BigDecimal("990.000").compareTo(stockService.obtenerDisponible(itemId)));
+	}
+
+	@Test
+	void egresoConsumeLoteFefo() {
+		LocalDate hoy = LocalDate.now();
+		loteRepository.save(new Lote(1L, "L-VENCE-LEJOS", hoy, hoy.plusDays(30), new BigDecimal("100.000")));
+		loteRepository.save(new Lote(1L, "L-VENCE-CERCA", hoy, hoy.plusDays(10), new BigDecimal("100.000")));
+		loteRepository.save(new Lote(1L, "L-SIN-VENC", hoy, null, new BigDecimal("100.000")));
+		movimientoRepository.save(new MovimientoStock(TipoMovimiento.INGRESO, 1L, 1L, null, new BigDecimal("100.000"), hoy.atStartOfDay(), "i1"));
+		movimientoRepository.save(new MovimientoStock(TipoMovimiento.INGRESO, 1L, 2L, null, new BigDecimal("100.000"), hoy.atStartOfDay(), "i2"));
+		movimientoRepository.save(new MovimientoStock(TipoMovimiento.INGRESO, 1L, 3L, null, new BigDecimal("100.000"), hoy.atStartOfDay(), "i3"));
+
+		stockService.egresarPorLotes(1L, 99L, new BigDecimal("150.000"));
+
+		Map<Long, BigDecimal> porLote = new HashMap<>();
+		for (MovimientoStock m : movimientoRepository.findByItemIdOrderByFechaAsc(1L)) {
+			if (m.getTipo() == TipoMovimiento.EGRESO_VENTA && m.getLoteId() != null) {
+				porLote.merge(m.getLoteId(), m.getCantidad(), BigDecimal::add);
+			}
+		}
+		assertEquals(0, new BigDecimal("100.000").compareTo(porLote.getOrDefault(2L, BigDecimal.ZERO))); // vence cerca -> 100
+		assertEquals(0, new BigDecimal("50.000").compareTo(porLote.getOrDefault(1L, BigDecimal.ZERO)));  // vence lejos -> 50
+		assertEquals(0, porLote.getOrDefault(3L, BigDecimal.ZERO).compareTo(BigDecimal.ZERO));           // sin vencimiento -> 0
 	}
 
 	@Test
 	void itemDuplicadoOInexistente() {
-		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-X", "X", "UN", null));
+		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-X", "X", "UN", null, null, null));
 		assertThrows(BusinessException.class, () -> stockService.crearItem(
-				new GestionarItem.CrearItemCommand("sku-x", "Y", "UN", null)));
+				new GestionarItem.CrearItemCommand("sku-x", "Y", "UN", null, null, null)));
 		assertThrows(NotFoundException.class, () -> stockService.desactivarItem(999L));
 	}
 
 	@Test
 	void desactivarItemPersiste() {
-		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-Y", "Y", "UN", null));
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-Y", "Y", "UN", null, null, null));
 		stockService.desactivarItem(item.getId());
 		assertFalse(itemRepository.findById(item.getId()).orElseThrow().isActivo());
 	}
 
 	@Test
 	void reactivarItemPersiste() {
-		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-RX", "Rx", "UN", null));
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-RX", "Rx", "UN", null, null, null));
 		stockService.desactivarItem(item.getId());
 		assertFalse(itemRepository.findById(item.getId()).orElseThrow().isActivo());
 
@@ -164,10 +238,10 @@ class StockServiceTest {
 
 	@Test
 	void actualizarItemCambiaNombreYUnidad() {
-		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MOD", "Original", "UN", null));
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MOD", "Original", "UN", null, null, null));
 
 		Item actualizado = stockService.actualizarItem(new GestionarItem.ActualizarItemCommand(
-				item.getId(), "Modificado", "KG", null));
+				item.getId(), "Modificado", "KG", null, null, null));
 
 		assertEquals("Modificado", actualizado.getNombre());
 		assertEquals("KG", actualizado.getUnidadMedida());
@@ -176,32 +250,53 @@ class StockServiceTest {
 
 	@Test
 	void actualizarItemConDatosInvalidosOInexistenteLanza() {
-		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MOD2", "Original", "UN", null));
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MOD2", "Original", "UN", null, null, null));
 
 		assertThrows(BusinessException.class, () -> stockService.actualizarItem(
-				new GestionarItem.ActualizarItemCommand(item.getId(), "  ", "UN", null)));
+				new GestionarItem.ActualizarItemCommand(item.getId(), "  ", "UN", null, null, null)));
 		assertThrows(NotFoundException.class, () -> stockService.actualizarItem(
-				new GestionarItem.ActualizarItemCommand(999L, "X", "UN", null)));
+				new GestionarItem.ActualizarItemCommand(999L, "X", "UN", null, null, null)));
 	}
 
 	@Test
 	void crearItemConStockMinimoPersiste() {
-		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MIN", "Min", "UN", new BigDecimal("20.000")));
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MIN", "Min", "UN", new BigDecimal("20.000"), null, null));
 		assertEquals(0, new BigDecimal("20.000").compareTo(item.getStockMinimo()));
 	}
 
 	@Test
 	void stockMinimoNegativoLanzaBusinessException() {
 		assertThrows(BusinessException.class, () -> stockService.crearItem(
-				new GestionarItem.CrearItemCommand("SKU-MINN", "Min", "UN", new BigDecimal("-1.000"))));
+				new GestionarItem.CrearItemCommand("SKU-MINN", "Min", "UN", new BigDecimal("-1.000"), null, null)));
 	}
 
 	@Test
 	void actualizarItemCambiaStockMinimo() {
-		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MIN2", "Min", "UN", null));
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-MIN2", "Min", "UN", null, null, null));
 		Item actualizado = stockService.actualizarItem(new GestionarItem.ActualizarItemCommand(
-				item.getId(), "Min2", "UN", new BigDecimal("15.000")));
+				item.getId(), "Min2", "UN", new BigDecimal("15.000"), null, null));
 		assertEquals(0, new BigDecimal("15.000").compareTo(actualizado.getStockMinimo()));
+	}
+
+	@Test
+	void crearItemConPrecioListaPersiste() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand(
+				"SKU-PRECIO", "Con Precio", "UN", null, new BigDecimal("12.50"), null));
+		assertEquals(0, new BigDecimal("12.50").compareTo(item.getPrecioLista()));
+	}
+
+	@Test
+	void precioListaNegativoLanzaBusinessException() {
+		assertThrows(BusinessException.class, () -> stockService.crearItem(
+				new GestionarItem.CrearItemCommand("SKU-PRECIO-N", "Negativo", "UN", null, new BigDecimal("-1.00"), null)));
+	}
+
+	@Test
+	void actualizarItemCambiaPrecioLista() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-PRECIO-2", "Precio", "UN", null, null, null));
+		Item actualizado = stockService.actualizarItem(new GestionarItem.ActualizarItemCommand(
+				item.getId(), "Precio", "UN", null, new BigDecimal("20.00"), null));
+		assertEquals(0, new BigDecimal("20.00").compareTo(actualizado.getPrecioLista()));
 	}
 
 	@Test
@@ -214,6 +309,48 @@ class StockServiceTest {
 		List<Lote> resultado = stockService.listarLotesPorVencer(30);
 
 		assertEquals(2, resultado.size());
+	}
+
+	@Test
+	void listarItemsPaginadoBuscaPorQ() {
+		stockService.crearItem(new GestionarItem.CrearItemCommand("H1", "Harina 000", "KG", null, null, null));
+		stockService.crearItem(new GestionarItem.CrearItemCommand("A1", "Aceite 1L", "UN", null, null, null));
+
+		PageResponse<Item> pagina = stockService.listarItemsPaginado("harina", null, 0, 20);
+
+		assertEquals(1, pagina.content().size());
+		assertEquals(1, pagina.totalElements());
+		assertEquals(1, pagina.totalPages());
+		assertEquals("Harina 000", pagina.content().get(0).getNombre());
+	}
+
+	@Test
+	void crearItemConCategoriaPersiste() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand(
+				"SKU-CAT", "Harina Integral", "KG", null, null, "Harinas"));
+		assertEquals("Harinas", item.getCategoria());
+	}
+
+	@Test
+	void listarItemsPaginadoFiltraPorCategoria() {
+		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-C1", "Harina 000", "KG", null, null, "Harinas"));
+		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-C2", "Aceite 1L", "UN", null, null, "Aceites"));
+
+		com.sistema.common.model.PageResponse<Item> pagina = stockService.listarItemsPaginado(null, "Harinas", 0, 20);
+
+		assertEquals(1, pagina.content().size());
+		assertEquals("SKU-C1", pagina.content().get(0).getSku());
+	}
+
+	@Test
+	void listarCategoriasDevuelveDistintas() {
+		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-D1", "A", "UN", null, null, "Harinas"));
+		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-D2", "B", "UN", null, null, "Harinas"));
+		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-D3", "C", "UN", null, null, "Aceites"));
+
+		assertEquals(2, stockService.listarCategorias().size());
+		assertTrue(stockService.listarCategorias().contains("Harinas"));
+		assertTrue(stockService.listarCategorias().contains("Aceites"));
 	}
 
 	private static class FakeItemRepository implements ItemRepository {
@@ -243,6 +380,32 @@ class StockServiceTest {
 		@Override
 		public List<Item> findAll() {
 			return new ArrayList<>(datos.values());
+		}
+
+		@Override
+		public PageResponse<Item> buscar(String q, String categoria, int page, int size) {
+			String cat = categoria == null || categoria.isBlank() ? null : categoria.trim();
+			List<Item> todos = datos.values().stream()
+					.filter(i -> q == null || q.isBlank()
+							|| i.getSku().toLowerCase().contains(q.toLowerCase())
+							|| i.getNombre().toLowerCase().contains(q.toLowerCase()))
+					.filter(i -> cat == null || cat.equals(i.getCategoria()))
+					.toList();
+			int total = todos.size();
+			int from = Math.min(page * size, total);
+			int to = Math.min(from + size, total);
+			int totalPages = size == 0 ? 0 : (total + size - 1) / size;
+			return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
+		}
+
+		@Override
+		public List<String> listarCategorias() {
+			return datos.values().stream()
+					.map(Item::getCategoria)
+					.filter(c -> c != null && !c.isBlank())
+					.distinct()
+					.sorted()
+					.toList();
 		}
 	}
 
@@ -314,6 +477,16 @@ class StockServiceTest {
 		@Override
 		public List<MovimientoStock> findByPedidoId(Long pedidoId) {
 			return datos.stream().filter(m -> pedidoId.equals(m.getPedidoId())).toList();
+		}
+
+		@Override
+		public PageResponse<MovimientoStock> listarPaginado(Long itemId, int page, int size) {
+			List<MovimientoStock> todos = findByItemIdOrderByFechaAsc(itemId);
+			int total = todos.size();
+			int from = Math.min(page * size, total);
+			int to = Math.min(from + size, total);
+			int totalPages = size == 0 ? 0 : (total + size - 1) / size;
+			return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
 		}
 	}
 }

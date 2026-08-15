@@ -3,21 +3,29 @@ package com.sistema.pedido.service;
 import com.sistema.common.exception.BusinessException;
 import com.sistema.pedido.model.EstadoPedido;
 import com.sistema.pedido.model.Pedido;
+import com.sistema.pedido.model.PedidoItem;
 import com.sistema.pedido.port.in.CrearPedido;
 import com.sistema.pedido.port.in.CrearPedido.CrearPedidoCommand;
 import com.sistema.pedido.port.in.CrearPedido.LineaPedidoCommand;
 import com.sistema.pedido.port.in.GestionarEntrega;
 import com.sistema.pedido.port.in.GestionarEntrega.EntregaLineaCommand;
 import com.sistema.pedido.port.in.GestionarEntrega.RegistrarEntregaCommand;
+import com.sistema.pedido.port.in.ModificarStockPedido;
 import com.sistema.pedido.port.out.ClienteGateway;
+import com.sistema.pedido.port.out.NotificacionGateway;
 import com.sistema.pedido.port.out.PedidoRepository;
 import com.sistema.pedido.port.out.StockGateway;
+import com.sistema.usuario.model.Rol;
+import com.sistema.usuario.model.Usuario;
+import com.sistema.usuario.port.in.ConsultarUsuario;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,11 +42,18 @@ class PedidoServiceTest {
 	private PedidoService pedidoService;
 	private FakePedidoRepository pedidoRepository;
 	private FakeStockGateway stockGateway;
+	private final List<Long> remitosGenerados = new ArrayList<>();
+	private final List<RegistroNotificacion> notificaciones = new ArrayList<>();
+	private final List<Long> admins = new ArrayList<>();
 
 	@BeforeEach
 	void setUp() {
 		pedidoRepository = new FakePedidoRepository();
 		stockGateway = new FakeStockGateway();
+		remitosGenerados.clear();
+		notificaciones.clear();
+		admins.clear();
+		admins.add(99L);
 		pedidoService = new PedidoService(pedidoRepository, stockGateway, new ClienteGateway() {
 			@Override
 			public boolean existeCliente(Long clienteId) {
@@ -49,12 +64,55 @@ class PedidoServiceTest {
 			public Optional<Long> zonaDeCliente(Long clienteId) {
 				return Optional.empty();
 			}
-		}, id -> true);
+		}, id -> true, (pedidoId, clienteId, lineas) -> {
+			remitosGenerados.add(pedidoId);
+			return 1L;
+		}, (tipo, mensaje, paraUsuarioId, pedidoId) -> notificaciones
+				.add(new RegistroNotificacion(tipo, mensaje, paraUsuarioId, pedidoId)), new ConsultarUsuario() {
+			@Override
+			public Optional<Usuario> buscarPorId(Long id) {
+				return Optional.empty();
+			}
+
+			@Override
+			public Optional<Usuario> buscarPorEmail(String email) {
+				return Optional.empty();
+			}
+
+			@Override
+			public List<Usuario> listarTodos() {
+				List<Usuario> usuarios = new ArrayList<>();
+				for (Long adminId : admins) {
+					Usuario admin = new Usuario("Admin", "admin@test.com", "hash",
+							new HashSet<>(List.of(Rol.ADMINISTRATIVO)));
+					admin.setId(adminId);
+					usuarios.add(admin);
+				}
+				return usuarios;
+			}
+
+			@Override
+			public com.sistema.common.model.PageResponse<Usuario> listarPaginado(String q, int page, int size) {
+				return null;
+			}
+		}, 48L);
 	}
 
 	private Pedido crearPedido(Long itemId, BigDecimal cantidad) {
 		return pedidoService.crearPedido(new CrearPedidoCommand(1L, 1L, null, null,
 				List.of(new LineaPedidoCommand(itemId, cantidad, new BigDecimal("5.00")))));
+	}
+
+	@Test
+	void contadoresDevuelveTodosLosEstados() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+
+		Map<EstadoPedido, Long> contadores = pedidoService.contadores();
+
+		assertEquals(EstadoPedido.values().length, contadores.size());
+		assertEquals(1L, contadores.get(EstadoPedido.PENDIENTE_PREPARACION));
 	}
 
 	@Test
@@ -142,6 +200,7 @@ class PedidoServiceTest {
 		assertTrue(stockGateway.operaciones.stream().anyMatch(o -> o.startsWith("EGRESO:")));
 		assertFalse(stockGateway.operaciones.stream().anyMatch(o -> o.startsWith("LIBERACION:")));
 		assertEquals(0, pedidoRepository.findByPedidoPadreId(pedido.getId()).size());
+		assertTrue(remitosGenerados.contains(pedido.getId()));
 	}
 
 	@Test
@@ -167,6 +226,7 @@ class PedidoServiceTest {
 		assertEquals(pedido.getId(), hijo.getPedidoPadreId());
 		assertEquals(1, hijo.getItems().size());
 		assertEquals(0, new BigDecimal("2.000").compareTo(hijo.getItems().get(0).getCantidadPedida()));
+		assertTrue(remitosGenerados.contains(pedido.getId()));
 	}
 
 	@Test
@@ -325,6 +385,118 @@ class PedidoServiceTest {
 		assertEquals(EstadoPedido.PENDIENTE_ENTREGA, asignado.getEstado());
 	}
 
+	@Test
+	void ttlCancelaReservasInactivasYLiberaStock() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+		pedido.setUpdatedAt(LocalDateTime.now().minusHours(72));
+		pedidoRepository.save(pedido);
+
+		int expirados = pedidoService.expirarReservasInactivas();
+
+		assertEquals(1, expirados);
+		Pedido recargado = pedidoRepository.findById(pedido.getId()).orElseThrow();
+		assertEquals(EstadoPedido.RECHAZADO, recargado.getEstado());
+		assertTrue(stockGateway.operaciones.stream().anyMatch(o -> o.startsWith("LIBERACION:")));
+		assertEquals(0, new BigDecimal("100.000").compareTo(stockGateway.disponible.get(10L)));
+	}
+
+	@Test
+	void ttlNoCancelaPedidosRecientes() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+
+		int expirados = pedidoService.expirarReservasInactivas();
+
+		assertEquals(0, expirados);
+		assertEquals(EstadoPedido.PENDIENTE_PREPARACION,
+				pedidoRepository.findById(pedido.getId()).orElseThrow().getEstado());
+	}
+
+	@Test
+	void marcarFaltantePasaABackorderRegistraMermaYNotifica() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		stockGateway.lotesDisponibles.put(10L, List.of(5L));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+		Usuario actor = new Usuario("Depo", "depo@test.com", "hash",
+				new HashSet<>(List.of(Rol.ENCARGADO_DEPOSITO)));
+		actor.setId(2L);
+
+		Pedido resultante = pedidoService.marcarFaltante(
+				new ModificarStockPedido.MarcarFaltanteCommand(pedido.getId(), 10L, new BigDecimal("3.000"),
+						"Lote dañado", actor));
+
+		assertEquals(EstadoPedido.PENDIENTE_STOCK, resultante.getEstado());
+		assertEquals(0, new BigDecimal("7.000").compareTo(resultante.getItems().get(0).getCantidadReservada()));
+		assertTrue(resultante.getItems().get(0).isPendienteStock());
+		assertTrue(stockGateway.operaciones.stream().anyMatch(o -> o.startsWith("MERMA:10:5:")));
+		assertEquals(1, notificaciones.size());
+		assertEquals("FALTANTE_PRODUCTO", notificaciones.get(0).tipo());
+		assertEquals(99L, notificaciones.get(0).paraUsuarioId());
+		assertEquals(pedido.getId(), notificaciones.get(0).pedidoId());
+	}
+
+	@Test
+	void marcarFaltanteSoloPermitePreparacion() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		stockGateway.lotesDisponibles.put(10L, List.of(5L));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+
+		assertThrows(BusinessException.class, () -> pedidoService.marcarFaltante(
+				new ModificarStockPedido.MarcarFaltanteCommand(pedido.getId(), 10L, new BigDecimal("3.000"),
+						"Faltante", null)));
+	}
+
+	@Test
+	void marcarFaltanteSinStockFisicoLanza() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+
+		assertThrows(BusinessException.class, () -> pedidoService.marcarFaltante(
+				new ModificarStockPedido.MarcarFaltanteCommand(pedido.getId(), 10L, new BigDecimal("3.000"),
+						"Faltante", null)));
+	}
+
+	@Test
+	void consolidarPedidosFusionaLineasYCancelaOrigenes() {
+		Pedido p1 = crearPedido(10L, new BigDecimal("2.000"));
+		Pedido p2 = crearPedido(10L, new BigDecimal("3.000"));
+		Pedido p3 = crearPedido(11L, new BigDecimal("4.000"));
+
+		Pedido consolidado = pedidoService.consolidarPedidos(
+				new ModificarStockPedido.ConsolidarCommand(List.of(p1.getId(), p2.getId(), p3.getId()), 1L));
+
+		assertEquals(2, consolidado.getItems().size());
+		PedidoItem item10 = consolidado.itemPorItem(10L).orElseThrow();
+		assertEquals(0, new BigDecimal("5.000").compareTo(item10.getCantidadPedida()));
+		PedidoItem item11 = consolidado.itemPorItem(11L).orElseThrow();
+		assertEquals(0, new BigDecimal("4.000").compareTo(item11.getCantidadPedida()));
+		assertEquals(EstadoPedido.PENDIENTE_CONFIRMACION, consolidado.getEstado());
+		assertEquals(EstadoPedido.RECHAZADO, pedidoRepository.findById(p1.getId()).orElseThrow().getEstado());
+		assertEquals(EstadoPedido.RECHAZADO, pedidoRepository.findById(p2.getId()).orElseThrow().getEstado());
+	}
+
+	@Test
+	void consolidarExigeMismoClienteYPendienteConfirmacion() {
+		Pedido p1 = crearPedido(10L, new BigDecimal("2.000"));
+		Pedido p2 = crearPedido(10L, new BigDecimal("3.000"));
+		p2.setClienteId(2L);
+		pedidoRepository.save(p2);
+		assertThrows(BusinessException.class, () -> pedidoService.consolidarPedidos(
+				new ModificarStockPedido.ConsolidarCommand(List.of(p1.getId(), p2.getId()), 1L)));
+
+		Pedido p3 = crearPedido(10L, new BigDecimal("2.000"));
+		p3.setEstado(EstadoPedido.PENDIENTE_PREPARACION);
+		pedidoRepository.save(p3);
+		Pedido p4 = crearPedido(10L, new BigDecimal("1.000"));
+		assertThrows(BusinessException.class, () -> pedidoService.consolidarPedidos(
+				new ModificarStockPedido.ConsolidarCommand(List.of(p3.getId(), p4.getId()), 1L)));
+	}
+
 	private static class FakePedidoRepository implements PedidoRepository {
 
 		private final Map<Long, Pedido> datos = new HashMap<>();
@@ -334,6 +506,9 @@ class PedidoServiceTest {
 		public Pedido save(Pedido pedido) {
 			if (pedido.getId() == null) {
 				pedido.setId(secuencia.getAndIncrement());
+			}
+			if (pedido.getUpdatedAt() == null) {
+				pedido.setUpdatedAt(LocalDateTime.now());
 			}
 			datos.put(pedido.getId(), pedido);
 			return pedido;
@@ -352,6 +527,11 @@ class PedidoServiceTest {
 		@Override
 		public List<Pedido> findByEstado(EstadoPedido estado) {
 			return datos.values().stream().filter(p -> p.getEstado() == estado).toList();
+		}
+
+		@Override
+		public long contarPorEstado(EstadoPedido estado) {
+			return datos.values().stream().filter(p -> p.getEstado() == estado).count();
 		}
 
 		@Override
@@ -374,6 +554,7 @@ class PedidoServiceTest {
 
 		private final Map<Long, BigDecimal> disponible = new HashMap<>();
 		private final List<String> operaciones = new ArrayList<>();
+		private final Map<Long, List<Long>> lotesDisponibles = new HashMap<>();
 
 		@Override
 		public boolean existeItem(Long itemId) {
@@ -405,5 +586,29 @@ class PedidoServiceTest {
 			disponible.put(itemId, consultarDisponible(itemId).subtract(cantidad));
 			operaciones.add("EGRESO:" + itemId + ":" + pedidoId + ":" + cantidad);
 		}
+
+		@Override
+		public List<Long> listarLoteIdsDisponibles(Long itemId) {
+			return lotesDisponibles.getOrDefault(itemId, List.of());
+		}
+
+		@Override
+		public void registrarMerma(Long itemId, Long loteId, BigDecimal cantidad, String motivo) {
+			operaciones.add("MERMA:" + itemId + ":" + loteId + ":" + cantidad);
+		}
+
+		@Override
+		public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo) {
+			disponible.put(itemId, consultarDisponible(itemId).add(cantidad));
+			operaciones.add("INGRESO:" + itemId + ":" + cantidad);
+		}
+
+		@Override
+		public BigDecimal consultarPrecioLista(Long itemId) {
+			return BigDecimal.ZERO;
+		}
+	}
+
+	private record RegistroNotificacion(String tipo, String mensaje, Long paraUsuarioId, Long pedidoId) {
 	}
 }

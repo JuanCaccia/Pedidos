@@ -2,6 +2,7 @@ package com.sistema.stock.service;
 
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
+import com.sistema.common.model.PageResponse;
 import com.sistema.stock.model.Item;
 import com.sistema.stock.model.Lote;
 import com.sistema.stock.model.MovimientoStock;
@@ -14,12 +15,16 @@ import com.sistema.stock.port.in.RegistrarIngreso;
 import com.sistema.stock.port.out.ItemRepository;
 import com.sistema.stock.port.out.LoteRepository;
 import com.sistema.stock.port.out.MovimientoStockRepository;
+import com.sistema.usuario.model.Rol;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,12 +35,15 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	private final ItemRepository itemRepository;
 	private final LoteRepository loteRepository;
 	private final MovimientoStockRepository movimientoStockRepository;
+	private final BigDecimal ajusteMaximoEncargado;
 
 	public StockService(ItemRepository itemRepository, LoteRepository loteRepository,
-			MovimientoStockRepository movimientoStockRepository) {
+			MovimientoStockRepository movimientoStockRepository,
+			@Value("${app.stock.ajuste-maximo-encargado:50}") BigDecimal ajusteMaximoEncargado) {
 		this.itemRepository = itemRepository;
 		this.loteRepository = loteRepository;
 		this.movimientoStockRepository = movimientoStockRepository;
+		this.ajusteMaximoEncargado = ajusteMaximoEncargado;
 	}
 
 	// ---------- GestionarItem ----------
@@ -60,8 +68,14 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		if (minimo.signum() < 0) {
 			throw new BusinessException("VALIDATION_ERROR", "El stock mínimo debe ser mayor o igual a cero");
 		}
+		BigDecimal precio = command.precioLista() == null ? BigDecimal.ZERO : command.precioLista();
+		if (precio.signum() < 0) {
+			throw new BusinessException("VALIDATION_ERROR", "El precio de lista no puede ser negativo");
+		}
 		Item item = new Item(sku, command.nombre().trim(), command.unidadMedida().trim());
 		item.setStockMinimo(minimo);
+		item.setPrecioLista(precio);
+		item.setCategoria(normalizarCategoria(command.categoria()));
 		return itemRepository.save(item);
 	}
 
@@ -79,9 +93,15 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		if (minimo.signum() < 0) {
 			throw new BusinessException("VALIDATION_ERROR", "El stock mínimo debe ser mayor o igual a cero");
 		}
+		BigDecimal precio = command.precioLista() == null ? BigDecimal.ZERO : command.precioLista();
+		if (precio.signum() < 0) {
+			throw new BusinessException("VALIDATION_ERROR", "El precio de lista no puede ser negativo");
+		}
 		item.setNombre(command.nombre().trim());
 		item.setUnidadMedida(command.unidadMedida().trim());
 		item.setStockMinimo(minimo);
+		item.setPrecioLista(precio);
+		item.setCategoria(normalizarCategoria(command.categoria()));
 		return itemRepository.save(item);
 	}
 
@@ -137,8 +157,9 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		if (command.motivo() == null || command.motivo().isBlank()) {
 			throw new BusinessException("VALIDATION_ERROR", "Se requiere un motivo para la merma");
 		}
-		if (obtenerDisponible(item.getId()).compareTo(command.cantidad()) < 0) {
-			throw new BusinessException("MERMA_SIN_STOCK", "No hay stock disponible suficiente para la merma");
+		if (disponibleDeLote(item.getId(), lote.getId()).compareTo(command.cantidad()) < 0) {
+			throw new BusinessException("MERMA_SIN_STOCK",
+					"No hay suficiente stock físico en el lote para la merma");
 		}
 		return movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.MERMA, item.getId(), lote.getId(),
 				null, command.cantidad(), LocalDateTime.now(), command.motivo().trim()));
@@ -161,8 +182,47 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		if (disponible.add(command.cantidad()).signum() < 0) {
 			throw new BusinessException("AJUSTE_SIN_STOCK", "El ajuste dejaría stock negativo");
 		}
+		if (command.actor() == null || !command.actor().tieneRol(Rol.ADMINISTRATIVO)) {
+			if (command.cantidad().abs().compareTo(ajusteMaximoEncargado) > 0) {
+				throw new BusinessException("AJUSTE_REQUIERE_ADMIN",
+						"El ajuste supera el máximo permitido (" + ajusteMaximoEncargado + "); requiere un usuario ADMINISTRATIVO");
+			}
+		}
 		return movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.AJUSTE_INVENTARIO, item.getId(),
 				null, null, command.cantidad(), LocalDateTime.now(), command.motivo().trim()));
+	}
+
+	@Transactional
+	public List<MovimientoStock> egresarPorLotes(Long itemId, Long pedidoId, BigDecimal cantidad) {
+		List<MovimientoStock> creados = new ArrayList<>();
+		BigDecimal restante = cantidad;
+		List<Lote> lotes = loteRepository.findByItemId(itemId).stream()
+				.sorted(Comparator
+						.comparing((Lote l) -> l.getFechaVencimiento() == null ? Long.MAX_VALUE : l.getFechaVencimiento().toEpochDay())
+						.thenComparing(Lote::getFechaIngreso)
+						.thenComparing(Lote::getId))
+				.toList();
+		for (Lote lote : lotes) {
+			if (restante.signum() <= 0) {
+				break;
+			}
+			BigDecimal disponible = disponibleDeLote(itemId, lote.getId());
+			if (disponible.signum() <= 0) {
+				continue;
+			}
+			BigDecimal aConsumir = restante.min(disponible);
+			MovimientoStock egreso = movimientoStockRepository.save(new MovimientoStock(
+					TipoMovimiento.EGRESO_VENTA, itemId, lote.getId(), pedidoId, aConsumir,
+					LocalDateTime.now(), "Egreso por venta pedido " + pedidoId));
+			creados.add(egreso);
+			restante = restante.subtract(aConsumir);
+		}
+		if (restante.signum() > 0) {
+			creados.add(movimientoStockRepository.save(new MovimientoStock(
+					TipoMovimiento.EGRESO_VENTA, itemId, null, pedidoId, restante,
+					LocalDateTime.now(), "Egreso sin lote pedido " + pedidoId)));
+		}
+		return creados;
 	}
 
 	// ---------- ConsultarStock ----------
@@ -175,6 +235,16 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	@Override
 	public List<Item> listarItems() {
 		return itemRepository.findAll();
+	}
+
+	@Override
+	public PageResponse<Item> listarItemsPaginado(String q, String categoria, int page, int size) {
+		return itemRepository.buscar(q, categoria, page, size);
+	}
+
+	@Override
+	public List<String> listarCategorias() {
+		return itemRepository.listarCategorias();
 	}
 
 	@Override
@@ -214,9 +284,28 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
 
+	private BigDecimal disponibleDeLote(Long itemId, Long loteId) {
+		List<MovimientoStock> movimientos = movimientoStockRepository.findByItemIdOrderByFechaAsc(itemId);
+		BigDecimal ingresos = movimientos.stream()
+				.filter(m -> m.getTipo() == TipoMovimiento.INGRESO && loteId.equals(m.getLoteId()))
+				.map(MovimientoStock::getCantidad).reduce(BigDecimal.ZERO, BigDecimal::add);
+		BigDecimal egresos = movimientos.stream()
+				.filter(m -> m.getTipo() == TipoMovimiento.EGRESO_VENTA && loteId.equals(m.getLoteId()))
+				.map(MovimientoStock::getCantidad).reduce(BigDecimal.ZERO, BigDecimal::add);
+		BigDecimal mermas = movimientos.stream()
+				.filter(m -> m.getTipo() == TipoMovimiento.MERMA && loteId.equals(m.getLoteId()))
+				.map(MovimientoStock::getCantidad).reduce(BigDecimal.ZERO, BigDecimal::add);
+		return ingresos.subtract(egresos).subtract(mermas);
+	}
+
 	@Override
 	public List<MovimientoStock> listarMovimientos(Long itemId) {
 		return movimientoStockRepository.findByItemIdOrderByFechaAsc(itemId);
+	}
+
+	@Override
+	public PageResponse<MovimientoStock> listarMovimientosPaginado(Long itemId, int page, int size) {
+		return movimientoStockRepository.listarPaginado(itemId, page, size);
 	}
 
 	@Override
@@ -238,5 +327,12 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		if (cantidad == null || cantidad.signum() <= 0) {
 			throw new BusinessException("VALIDATION_ERROR", "La cantidad debe ser mayor que cero");
 		}
+	}
+
+	private String normalizarCategoria(String categoria) {
+		if (categoria == null || categoria.isBlank()) {
+			return null;
+		}
+		return categoria.trim();
 	}
 }

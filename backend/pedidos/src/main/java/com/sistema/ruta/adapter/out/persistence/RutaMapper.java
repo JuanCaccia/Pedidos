@@ -9,6 +9,7 @@ public class RutaMapper {
 		Ruta ruta = new Ruta(entity.getZonaId(), entity.getRepartidorId(), entity.getFechaJornada());
 		ruta.setId(entity.getId());
 		ruta.setEstado(entity.getEstado());
+		ruta.setCapacidadBultos(entity.getCapacidadBultos());
 		for (RutaPedidoJpaEntity pedido : entity.getPedidos()) {
 			RutaPedido rp = new RutaPedido(pedido.getPedidoId());
 			rp.setId(pedido.getId());
@@ -23,6 +24,7 @@ public class RutaMapper {
 		if (ruta.getId() != null) {
 			entity.setId(ruta.getId());
 		}
+		entity.setCapacidadBultos(ruta.getCapacidadBultos());
 		for (RutaPedido rp : ruta.getPedidos()) {
 			RutaPedidoJpaEntity jpa = new RutaPedidoJpaEntity(rp.getPedidoId());
 			if (rp.getId() != null) {

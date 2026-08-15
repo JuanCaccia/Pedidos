@@ -15,6 +15,8 @@ import com.sistema.stock.port.in.ConsultarStock;
 import com.sistema.stock.port.in.GestionarMerma;
 import com.sistema.stock.port.in.RegistrarIngreso;
 import com.sistema.common.exception.NotFoundException;
+import com.sistema.common.model.PageMapper;
+import com.sistema.common.model.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -68,7 +70,7 @@ public class StockController {
 	@Operation(summary = "Ajuste de inventario firmado (+/-) para corregir diferencias fisicas")
 	public ResponseEntity<MovimientoStockResponse> ajustarInventario(@Valid @RequestBody AjusteRequest request) {
 		MovimientoStock movimiento = ajustarInventario.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(
-				request.itemId(), request.cantidad(), request.motivo()));
+				request.itemId(), request.cantidad(), request.motivo(), obtenerActorActual()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(MovimientoStockResponse.from(movimiento));
 	}
 
@@ -83,8 +85,10 @@ public class StockController {
 	}
 
 	@GetMapping("/items/{itemId}/movimientos")
-	public List<MovimientoStockResponse> listarMovimientos(@PathVariable Long itemId) {
-		return consultarStock.listarMovimientos(itemId).stream().map(MovimientoStockResponse::from).toList();
+	public PageResponse<MovimientoStockResponse> listarMovimientos(@PathVariable Long itemId,
+			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+		PageResponse<MovimientoStock> pagina = consultarStock.listarMovimientosPaginado(itemId, page, size);
+		return PageMapper.of(pagina.content(), pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages(), MovimientoStockResponse::from);
 	}
 
 	@GetMapping("/items/{itemId}/lotes")
@@ -96,5 +100,14 @@ public class StockController {
 	@Operation(summary = "Lotes con vencimiento dentro de los proximos N dias (incluye vencidos)")
 	public List<LoteResponse> lotesPorVencer(@RequestParam(defaultValue = "30") int dias) {
 		return consultarStock.listarLotesPorVencer(dias).stream().map(LoteResponse::from).toList();
+	}
+
+	private com.sistema.usuario.model.Usuario obtenerActorActual() {
+		org.springframework.security.core.Authentication auth =
+				org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+		if (auth != null && auth.getPrincipal() instanceof com.sistema.usuario.model.Usuario usuario) {
+			return usuario;
+		}
+		return null;
 	}
 }

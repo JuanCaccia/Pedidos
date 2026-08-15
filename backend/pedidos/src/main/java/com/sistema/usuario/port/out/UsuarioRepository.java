@@ -1,5 +1,6 @@
 package com.sistema.usuario.port.out;
 
+import com.sistema.common.model.PageResponse;
 import com.sistema.usuario.model.Usuario;
 
 import java.util.List;
@@ -14,4 +15,6 @@ public interface UsuarioRepository {
 	Optional<Usuario> findByEmail(String email);
 
 	List<Usuario> findAll();
+
+	PageResponse<Usuario> buscar(String q, int page, int size);
 }

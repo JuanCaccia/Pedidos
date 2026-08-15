@@ -15,6 +15,7 @@ public class PedidoMapper {
 		pedido.setPedidoPadreId(entity.getPedidoPadreId());
 		pedido.setEstado(entity.getEstado());
 		pedido.setFechaCreacion(entity.getFechaCreacion());
+		pedido.setUpdatedAt(entity.getUpdatedAt());
 		pedido.setTotal(entity.getTotal());
 		for (PedidoItemJpaEntity lineaEntity : entity.getItems()) {
 			PedidoItem linea = new PedidoItem(lineaEntity.getItemId(), lineaEntity.getCantidadPedida(),

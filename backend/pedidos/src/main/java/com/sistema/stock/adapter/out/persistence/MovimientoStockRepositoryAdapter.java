@@ -1,7 +1,10 @@
 package com.sistema.stock.adapter.out.persistence;
 
+import com.sistema.common.model.PageMapper;
+import com.sistema.common.model.PageResponse;
 import com.sistema.stock.model.MovimientoStock;
 import com.sistema.stock.port.out.MovimientoStockRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -42,5 +45,10 @@ public class MovimientoStockRepositoryAdapter implements MovimientoStockReposito
 	@Override
 	public List<MovimientoStock> findByPedidoId(Long pedidoId) {
 		return jpaRepository.findByPedidoId(pedidoId).stream().map(mapper::toDomain).toList();
+	}
+
+	@Override
+	public PageResponse<MovimientoStock> listarPaginado(Long itemId, int page, int size) {
+		return PageMapper.of(jpaRepository.findByItemIdOrderByFechaAsc(itemId, PageRequest.of(page, size)), mapper::toDomain);
 	}
 }

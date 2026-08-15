@@ -1,0 +1,1 @@
+ALTER TABLE ruta ADD COLUMN capacidad_bultos NUMERIC(12,3) NOT NULL DEFAULT 0;

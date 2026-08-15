@@ -1,0 +1,10 @@
+package com.sistema.compra.port.out;
+
+import java.math.BigDecimal;
+
+public interface StockGateway {
+
+	boolean existeItem(Long itemId);
+
+	void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo);
+}

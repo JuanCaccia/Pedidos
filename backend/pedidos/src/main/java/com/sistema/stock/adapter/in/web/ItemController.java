@@ -7,6 +7,8 @@ import com.sistema.stock.model.Item;
 import com.sistema.stock.port.in.ConsultarStock;
 import com.sistema.stock.port.in.GestionarItem;
 import com.sistema.common.exception.NotFoundException;
+import com.sistema.common.model.PageMapper;
+import com.sistema.common.model.PageResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -38,13 +41,21 @@ public class ItemController {
 	@PostMapping
 	public ResponseEntity<ItemResponse> crear(@Valid @RequestBody ItemRequest request) {
 		Item item = gestionarItem.crearItem(new GestionarItem.CrearItemCommand(
-				request.sku(), request.nombre(), request.unidadMedida(), request.stockMinimo()));
+				request.sku(), request.nombre(), request.unidadMedida(), request.stockMinimo(), request.precioLista(), request.categoria()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(ItemResponse.from(item));
 	}
 
 	@GetMapping
-	public List<ItemResponse> listar() {
-		return consultarStock.listarItems().stream().map(ItemResponse::from).toList();
+	public PageResponse<ItemResponse> listar(@RequestParam(required = false) String q,
+			@RequestParam(required = false) String categoria,
+			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+		PageResponse<Item> pagina = consultarStock.listarItemsPaginado(q, categoria, page, size);
+		return PageMapper.of(pagina.content(), pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages(), ItemResponse::from);
+	}
+
+	@GetMapping("/categorias")
+	public List<String> categorias() {
+		return consultarStock.listarCategorias();
 	}
 
 	@GetMapping("/{id}")
@@ -57,7 +68,7 @@ public class ItemController {
 	@PutMapping("/{id}")
 	public ResponseEntity<ItemResponse> actualizar(@PathVariable Long id, @Valid @RequestBody ActualizarItemRequest request) {
 		Item item = gestionarItem.actualizarItem(new GestionarItem.ActualizarItemCommand(
-				id, request.nombre(), request.unidadMedida(), request.stockMinimo()));
+				id, request.nombre(), request.unidadMedida(), request.stockMinimo(), request.precioLista(), request.categoria()));
 		return ResponseEntity.ok(ItemResponse.from(item));
 	}
 

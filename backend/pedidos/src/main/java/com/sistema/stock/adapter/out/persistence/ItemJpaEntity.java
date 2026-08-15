@@ -26,6 +26,12 @@ public class ItemJpaEntity extends BaseEntity {
 	@Column(name = "stock_minimo", nullable = false, precision = 12, scale = 3)
 	private BigDecimal stockMinimo = BigDecimal.ZERO;
 
+	@Column(name = "precio_lista", nullable = false, precision = 12, scale = 2)
+	private BigDecimal precioLista = BigDecimal.ZERO;
+
+	@Column(length = 100)
+	private String categoria;
+
 	protected ItemJpaEntity() {
 		// required by JPA
 	}
@@ -74,5 +80,21 @@ public class ItemJpaEntity extends BaseEntity {
 
 	public void setStockMinimo(BigDecimal stockMinimo) {
 		this.stockMinimo = stockMinimo;
+	}
+
+	public BigDecimal getPrecioLista() {
+		return precioLista;
+	}
+
+	public void setPrecioLista(BigDecimal precioLista) {
+		this.precioLista = precioLista;
+	}
+
+	public String getCategoria() {
+		return categoria;
+	}
+
+	public void setCategoria(String categoria) {
+		this.categoria = categoria;
 	}
 }

@@ -27,3 +27,8 @@ app:
   jwt:
     secret: ${JWT_SECRET:cambiar-en-produccion-esta-clave-secreta-jwt-2026}
     expiration-ms: ${JWT_EXPIRATION_MS:28800000}
+  stock:
+    ajuste-maximo-encargado: ${AJUSTE_MAXIMO_ENCARGADO:50}
+  pedido:
+    reserva-ttl-horas: ${RESERVA_TTL_HORAS:48}
+    reserva-ttl-job-ms: ${RESERVA_TTL_JOB_MS:3600000}

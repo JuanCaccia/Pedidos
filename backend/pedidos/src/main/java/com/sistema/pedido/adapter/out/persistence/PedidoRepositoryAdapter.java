@@ -41,6 +41,11 @@ public class PedidoRepositoryAdapter implements PedidoRepository {
 	}
 
 	@Override
+	public long contarPorEstado(EstadoPedido estado) {
+		return jpaRepository.countByEstado(estado);
+	}
+
+	@Override
 	public List<Pedido> findByClienteId(Long clienteId) {
 		return jpaRepository.findByClienteId(clienteId).stream().map(mapper::toDomain).toList();
 	}

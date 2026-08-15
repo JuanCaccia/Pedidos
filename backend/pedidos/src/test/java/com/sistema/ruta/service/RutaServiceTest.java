@@ -10,6 +10,7 @@ import com.sistema.ruta.port.out.RutaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,7 +39,7 @@ class RutaServiceTest {
 	}
 
 	private GestionarRuta.CrearRutaCommand comandoConPedidos(Long... pedidos) {
-		return new GestionarRuta.CrearRutaCommand(1L, 10L, LocalDate.of(2026, 8, 10), List.of(pedidos));
+		return new GestionarRuta.CrearRutaCommand(1L, 10L, LocalDate.of(2026, 8, 10), List.of(pedidos), null);
 	}
 
 	@Test
@@ -136,6 +137,39 @@ class RutaServiceTest {
 				() -> rutaService.asignarPedidos(ruta.getId(), List.of(200L)));
 	}
 
+	@Test
+	void crearRutaConCapacidadSuficienteOk() {
+		pedidoGateway.disponible.put(100L, true);
+		pedidoGateway.zonaDeCliente.put(100L, 1L);
+		pedidoGateway.unidades.put(100L, new BigDecimal("10"));
+		Ruta ruta = rutaService.crearRuta(new GestionarRuta.CrearRutaCommand(1L, 10L,
+				LocalDate.of(2026, 8, 10), List.of(100L), new BigDecimal("50")));
+		assertEquals(0, new BigDecimal("50").compareTo(ruta.getCapacidadBultos()));
+	}
+
+	@Test
+	void crearRutaExcedeCapacidadLanzaBusinessException() {
+		pedidoGateway.disponible.put(100L, true);
+		pedidoGateway.zonaDeCliente.put(100L, 1L);
+		pedidoGateway.unidades.put(100L, new BigDecimal("60"));
+		assertThrows(BusinessException.class, () -> rutaService.crearRuta(new GestionarRuta.CrearRutaCommand(
+				1L, 10L, LocalDate.of(2026, 8, 10), List.of(100L), new BigDecimal("50"))));
+	}
+
+	@Test
+	void asignarPedidosExcedeCapacidadLanza() {
+		pedidoGateway.disponible.put(100L, true);
+		pedidoGateway.zonaDeCliente.put(100L, 1L);
+		pedidoGateway.unidades.put(100L, new BigDecimal("10"));
+		Ruta ruta = rutaService.crearRuta(new GestionarRuta.CrearRutaCommand(1L, 10L,
+				LocalDate.of(2026, 8, 10), List.of(100L), new BigDecimal("10")));
+		pedidoGateway.disponible.put(200L, true);
+		pedidoGateway.zonaDeCliente.put(200L, 1L);
+		pedidoGateway.unidades.put(200L, new BigDecimal("10"));
+
+		assertThrows(BusinessException.class, () -> rutaService.asignarPedidos(ruta.getId(), List.of(200L)));
+	}
+
 	private static class FakeRutaRepository implements RutaRepository {
 
 		private final Map<Long, Ruta> datos = new HashMap<>();
@@ -180,7 +214,18 @@ class RutaServiceTest {
 
 		private final Map<Long, Boolean> disponible = new HashMap<>();
 		private final Map<Long, Long> zonaDeCliente = new HashMap<>();
+		private final Map<Long, BigDecimal> unidades = new HashMap<>();
 		private final List<String> llamadas = new ArrayList<>();
+
+		@Override
+		public BigDecimal unidadesDe(Long pedidoId) {
+			return unidades.getOrDefault(pedidoId, BigDecimal.ONE);
+		}
+
+		@Override
+		public String numeroDePedido(Long pedidoId) {
+			return "PED-" + pedidoId;
+		}
 
 		@Override
 		public boolean existePedido(Long pedidoId) {

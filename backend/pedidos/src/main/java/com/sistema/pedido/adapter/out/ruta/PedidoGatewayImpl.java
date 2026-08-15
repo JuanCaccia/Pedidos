@@ -8,6 +8,7 @@ import com.sistema.pedido.port.out.ClienteGateway;
 import com.sistema.ruta.port.out.PedidoGateway;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 @Component
@@ -22,6 +23,22 @@ public class PedidoGatewayImpl implements PedidoGateway {
 		this.consultarPedido = consultarPedido;
 		this.gestionarLogisticaPedido = gestionarLogisticaPedido;
 		this.clienteGateway = clienteGateway;
+	}
+
+	@Override
+	public BigDecimal unidadesDe(Long pedidoId) {
+		return consultarPedido.buscarPorId(pedidoId)
+				.map(p -> p.getItems().stream()
+						.map(com.sistema.pedido.model.PedidoItem::getCantidadReservada)
+						.reduce(BigDecimal.ZERO, BigDecimal::add))
+				.orElse(BigDecimal.ZERO);
+	}
+
+	@Override
+	public String numeroDePedido(Long pedidoId) {
+		return consultarPedido.buscarPorId(pedidoId)
+				.map(Pedido::getNumero)
+				.orElse("PED-" + pedidoId);
 	}
 
 	@Override

@@ -2,6 +2,7 @@ package com.sistema.usuario.service;
 
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
+import com.sistema.common.model.PageResponse;
 import com.sistema.usuario.model.Rol;
 import com.sistema.usuario.model.Usuario;
 import com.sistema.usuario.port.in.GestionarUsuario;
@@ -151,6 +152,20 @@ class UsuarioServiceTest {
 		@Override
 		public List<Usuario> findAll() {
 			return new ArrayList<>(datos.values());
+		}
+
+		@Override
+		public PageResponse<Usuario> buscar(String q, int page, int size) {
+			List<Usuario> todos = datos.values().stream()
+					.filter(u -> q == null || q.isBlank()
+							|| u.getNombre().toLowerCase().contains(q.toLowerCase())
+							|| u.getEmail().toLowerCase().contains(q.toLowerCase()))
+					.toList();
+			int total = todos.size();
+			int from = Math.min(page * size, total);
+			int to = Math.min(from + size, total);
+			int totalPages = size == 0 ? 0 : (total + size - 1) / size;
+			return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
 		}
 	}
 }

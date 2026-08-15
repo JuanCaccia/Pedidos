@@ -6,6 +6,8 @@ import com.sistema.usuario.adapter.in.web.dto.UsuarioRequest;
 import com.sistema.usuario.adapter.in.web.dto.UsuarioResponse;
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
+import com.sistema.common.model.PageMapper;
+import com.sistema.common.model.PageResponse;
 import com.sistema.usuario.model.Usuario;
 import com.sistema.usuario.port.in.ConsultarUsuario;
 import com.sistema.usuario.port.in.GestionarUsuario;
@@ -22,9 +24,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/usuarios")
@@ -80,8 +81,10 @@ public class UsuarioController {
 	}
 
 	@GetMapping
-	public List<UsuarioResponse> listar() {
-		return consultarUsuario.listarTodos().stream().map(UsuarioResponse::from).toList();
+	public PageResponse<UsuarioResponse> listar(@RequestParam(required = false) String q,
+			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+		PageResponse<Usuario> pagina = consultarUsuario.listarPaginado(q, page, size);
+		return PageMapper.of(pagina.content(), pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages(), UsuarioResponse::from);
 	}
 
 	private com.sistema.usuario.model.Usuario obtenerActorActual() {

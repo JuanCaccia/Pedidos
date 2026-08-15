@@ -46,6 +46,11 @@ class AuthServiceTest {
 			public List<Usuario> listarTodos() {
 				return List.of(usuario);
 			}
+
+			@Override
+			public com.sistema.common.model.PageResponse<Usuario> listarPaginado(String q, int page, int size) {
+				return new com.sistema.common.model.PageResponse<>(List.of(), page, size, 0, 0);
+			}
 		};
 		authService = new AuthService(consultar, encoder, jwtService);
 	}

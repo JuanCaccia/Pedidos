@@ -16,6 +16,8 @@ public interface PedidoRepository {
 
 	List<Pedido> findByEstado(EstadoPedido estado);
 
+	long contarPorEstado(EstadoPedido estado);
+
 	List<Pedido> findByClienteId(Long clienteId);
 
 	List<Pedido> findByVendedorId(Long vendedorId);

@@ -9,6 +9,8 @@ public class ItemMapper {
 		item.setId(entity.getId());
 		item.setActivo(entity.isActivo());
 		item.setStockMinimo(entity.getStockMinimo());
+		item.setPrecioLista(entity.getPrecioLista());
+		item.setCategoria(entity.getCategoria());
 		return item;
 	}
 
@@ -19,6 +21,8 @@ public class ItemMapper {
 		}
 		entity.setActivo(item.isActivo());
 		entity.setStockMinimo(item.getStockMinimo());
+		entity.setPrecioLista(item.getPrecioLista());
+		entity.setCategoria(item.getCategoria());
 		return entity;
 	}
 }

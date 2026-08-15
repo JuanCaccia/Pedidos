@@ -2,6 +2,9 @@ package com.sistema.cliente.adapter.out.persistence;
 
 import com.sistema.cliente.model.Cliente;
 import com.sistema.cliente.port.out.ClienteRepository;
+import com.sistema.common.model.PageMapper;
+import com.sistema.common.model.PageResponse;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -42,5 +45,14 @@ public class ClienteRepositoryAdapter implements ClienteRepository {
 	@Override
 	public List<Cliente> findByZonaId(Long zonaId) {
 		return jpaRepository.findByZonaId(zonaId).stream().map(mapper::toDomain).toList();
+	}
+
+	@Override
+	public PageResponse<Cliente> buscar(String q, Long zonaId, int page, int size) {
+		return PageMapper.of(jpaRepository.buscar(normalizar(q), zonaId, PageRequest.of(page, size)), mapper::toDomain);
+	}
+
+	private String normalizar(String q) {
+		return q == null || q.isBlank() ? null : q.trim();
 	}
 }

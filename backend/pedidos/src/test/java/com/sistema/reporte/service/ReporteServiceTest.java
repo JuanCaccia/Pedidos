@@ -1,6 +1,9 @@
 package com.sistema.reporte.service;
 
 import com.sistema.common.model.PageResponse;
+import com.sistema.cobranza.model.Cobranza;
+import com.sistema.cobranza.model.FormaPago;
+import com.sistema.cobranza.port.in.ConsultarCobranza;
 import com.sistema.pedido.model.EstadoPedido;
 import com.sistema.pedido.model.Pedido;
 import com.sistema.pedido.model.PedidoItem;
@@ -33,12 +36,14 @@ class ReporteServiceTest {
 	private FakeStock fakeStock;
 	private FakePedido fakePedido;
 	private FakeRuta fakeRuta;
+	private FakeCobranza fakeCobranza;
 
 	@BeforeEach
 	void setUp() {
 		fakeStock = new FakeStock();
 		fakePedido = new FakePedido();
 		fakeRuta = new FakeRuta();
+		fakeCobranza = new FakeCobranza();
 		ConsultarUsuario fakeUsuario = new ConsultarUsuario() {
 			@Override
 			public Optional<Usuario> buscarPorId(Long id) {
@@ -56,8 +61,13 @@ class ReporteServiceTest {
 			public List<Usuario> listarTodos() {
 				return List.of();
 			}
+
+			@Override
+			public PageResponse<Usuario> listarPaginado(String q, int page, int size) {
+				return new PageResponse<>(List.of(), page, size, 0, 0);
+			}
 		};
-		reporteService = new ReporteService(fakeStock, fakePedido, fakeUsuario, fakeRuta);
+		reporteService = new ReporteService(fakeStock, fakePedido, fakeUsuario, fakeRuta, fakeCobranza);
 	}
 
 	private Pedido pedidoEntregado(Long vendedorId, BigDecimal entregada, BigDecimal precio, LocalDateTime fecha) {
@@ -138,6 +148,46 @@ class ReporteServiceTest {
 		assertEquals("EN_CURSO", reporte.get(0).estado());
 	}
 
+	@Test
+	void resumenCajaAgrupaPorFormaDiaYVendedor() {
+		LocalDateTime fecha = LocalDateTime.of(2026, 8, 10, 10, 0);
+		Pedido pedido100 = pedidoEntregado(1L, BigDecimal.ZERO, BigDecimal.ZERO, fecha);
+		pedido100.setId(100L);
+		fakePedido.pedidos.add(pedido100);
+		fakeCobranza.cobranzas.add(new Cobranza(1L, 100L,
+				new BigDecimal("100.00"), FormaPago.EFECTIVO, fecha, null));
+		fakeCobranza.cobranzas.add(new Cobranza(1L, null,
+				new BigDecimal("50.00"), FormaPago.TRANSFERENCIA, fecha, null));
+
+		ConsultarReportes.ResumenCaja resumen = reporteService.resumenCaja(null, null);
+
+		assertEquals(0, new BigDecimal("150.00").compareTo(resumen.totalCobrado()));
+		assertEquals(2, resumen.cantidadCobranzas());
+		assertEquals(2, resumen.porFormaPago().size());
+		assertEquals(1, resumen.porDia().size());
+		// la cobranza sin pedido va a "Sin vendedor"
+		ConsultarReportes.PorVendedor sinVendedor = resumen.porVendedor().stream()
+				.filter(v -> v.vendedorId() == -1L).findFirst().orElseThrow();
+		assertEquals(0, new BigDecimal("50.00").compareTo(sinVendedor.monto()));
+	}
+
+	private static class FakeCobranza implements ConsultarCobranza {
+		private final List<Cobranza> cobranzas = new ArrayList<>();
+
+		@Override
+		public List<Cobranza> listar(Long clienteId, LocalDate desde, LocalDate hasta) {
+			return cobranzas.stream()
+					.filter(c -> desde == null || !c.getFecha().toLocalDate().isBefore(desde))
+					.filter(c -> hasta == null || !c.getFecha().toLocalDate().isAfter(hasta))
+					.toList();
+		}
+
+		@Override
+		public ConsultarCobranza.EstadoCuenta estadoCuenta(Long clienteId) {
+			return null;
+		}
+	}
+
 	private static class FakeStock implements ConsultarStock {
 		private final List<Item> items = new ArrayList<>();
 		private final Map<Long, BigDecimal> disponible = new HashMap<>();
@@ -154,6 +204,27 @@ class ReporteServiceTest {
 		}
 
 		@Override
+		public PageResponse<Item> listarItemsPaginado(String q, String categoria, int page, int size) {
+			String cat = categoria == null || categoria.isBlank() ? null : categoria.trim();
+			List<Item> todos = items.stream()
+					.filter(i -> q == null || q.isBlank()
+							|| i.getSku().toLowerCase().contains(q.toLowerCase())
+							|| i.getNombre().toLowerCase().contains(q.toLowerCase()))
+					.filter(i -> cat == null || cat.equals(i.getCategoria()))
+					.toList();
+			int total = todos.size();
+			int from = Math.min(page * size, total);
+			int to = Math.min(from + size, total);
+			int totalPages = size == 0 ? 0 : (total + size - 1) / size;
+			return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
+		}
+
+		@Override
+		public List<String> listarCategorias() {
+			return List.of();
+		}
+
+		@Override
 		public BigDecimal obtenerDisponible(Long itemId) {
 			return disponible.getOrDefault(itemId, BigDecimal.ZERO);
 		}
@@ -166,6 +237,11 @@ class ReporteServiceTest {
 		@Override
 		public List<com.sistema.stock.model.MovimientoStock> listarMovimientos(Long itemId) {
 			return List.of();
+		}
+
+		@Override
+		public PageResponse<com.sistema.stock.model.MovimientoStock> listarMovimientosPaginado(Long itemId, int page, int size) {
+			return new PageResponse<>(List.of(), page, size, 0, 0);
 		}
 
 		@Override
@@ -210,6 +286,11 @@ class ReporteServiceTest {
 		@Override
 		public List<Pedido> listarHijosDe(Long pedidoPadreId) {
 			return pedidos.stream().filter(p -> pedidoPadreId.equals(p.getPedidoPadreId())).toList();
+		}
+
+		@Override
+		public Map<EstadoPedido, Long> contadores() {
+			return Map.of();
 		}
 
 		@Override

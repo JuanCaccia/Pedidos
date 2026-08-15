@@ -1,0 +1,126 @@
+package com.sistema.compra.service;
+
+import com.sistema.common.exception.BusinessException;
+import com.sistema.common.exception.NotFoundException;
+import com.sistema.compra.model.EstadoOrdenCompra;
+import com.sistema.compra.model.OrdenCompra;
+import com.sistema.compra.model.OrdenCompraLinea;
+import com.sistema.compra.port.in.ConsultarOrdenCompra;
+import com.sistema.compra.port.in.GestionarOrdenCompra;
+import com.sistema.compra.port.out.OrdenCompraRepository;
+import com.sistema.compra.port.out.ProveedorRepository;
+import com.sistema.compra.port.out.StockGateway;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@Transactional(readOnly = true)
+public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenCompra {
+
+	private final OrdenCompraRepository ordenCompraRepository;
+	private final ProveedorRepository proveedorRepository;
+	private final StockGateway stockGateway;
+
+	public OrdenCompraService(OrdenCompraRepository ordenCompraRepository, ProveedorRepository proveedorRepository, StockGateway stockGateway) {
+		this.ordenCompraRepository = ordenCompraRepository;
+		this.proveedorRepository = proveedorRepository;
+		this.stockGateway = stockGateway;
+	}
+
+	@Override
+	@Transactional
+	public OrdenCompra crearOrdenCompra(CrearOrdenCompraCommand command) {
+		if (!proveedorRepository.findById(command.proveedorId()).isPresent()) {
+			throw new NotFoundException("Proveedor no encontrado: " + command.proveedorId());
+		}
+		if (command.lineas() == null || command.lineas().isEmpty()) {
+			throw new BusinessException("VALIDATION_ERROR", "La orden de compra debe tener al menos una línea");
+		}
+		OrdenCompra orden = new OrdenCompra(command.proveedorId(), command.observaciones());
+		for (LineaOrdenCommand linea : command.lineas()) {
+			if (linea.cantidad() == null || linea.cantidad().signum() <= 0) {
+				throw new BusinessException("VALIDATION_ERROR", "La cantidad debe ser mayor a cero");
+			}
+			if (linea.precioUnitario() == null || linea.precioUnitario().signum() < 0) {
+				throw new BusinessException("VALIDATION_ERROR", "El precio unitario no puede ser negativo");
+			}
+			if (!stockGateway.existeItem(linea.itemId())) {
+				throw new NotFoundException("Item no encontrado: " + linea.itemId());
+			}
+			orden.agregarLinea(new OrdenCompraLinea(linea.itemId(), linea.cantidad(), linea.precioUnitario()));
+		}
+		orden.setNumero("OC-" + String.format("%06d", System.nanoTime() % 1000000));
+		return ordenCompraRepository.save(orden);
+	}
+
+	@Override
+	@Transactional
+	public OrdenCompra registrarRecepcion(RecepcionCommand command) {
+		OrdenCompra orden = obtenerO404(command.ordenId());
+		if (orden.getEstado() != EstadoOrdenCompra.PENDIENTE
+				&& orden.getEstado() != EstadoOrdenCompra.RECIBIDA_PARCIAL) {
+			throw new BusinessException("OC_ESTADO_INVALIDO",
+					"Solo se puede recibir una OC en PENDIENTE o RECIBIDA_PARCIAL");
+		}
+		for (RecepcionLineaCommand rl : command.lineas()) {
+			OrdenCompraLinea linea = orden.lineaPorId(rl.lineaId())
+					.orElseThrow(() -> new NotFoundException("Línea de OC no encontrada: " + rl.lineaId()));
+			if (rl.cantidadRecibida() == null || rl.cantidadRecibida().signum() <= 0) {
+				throw new BusinessException("VALIDATION_ERROR", "La cantidad recibida debe ser mayor a cero");
+			}
+			BigDecimal restante = linea.restante();
+			if (rl.cantidadRecibida().compareTo(restante) > 0) {
+				throw new BusinessException("VALIDATION_ERROR", "No se puede recibir más que el restante (" + restante + ")");
+			}
+			linea.recibir(rl.cantidadRecibida());
+			String codigoLote = orden.getNumero() + "-" + (System.nanoTime() % 100000);
+			stockGateway.registrarIngreso(linea.getItemId(), codigoLote, rl.cantidadRecibida(),
+					"Recepción de OC " + orden.getNumero());
+		}
+		boolean completa = orden.getLineas().stream()
+				.allMatch(l -> l.getCantidadRecibida().compareTo(l.getCantidadPedida()) >= 0);
+		orden.setEstado(completa ? EstadoOrdenCompra.RECIBIDA : EstadoOrdenCompra.RECIBIDA_PARCIAL);
+		return ordenCompraRepository.save(orden);
+	}
+
+	@Override
+	@Transactional
+	public void cancelarOrdenCompra(Long ordenId) {
+		OrdenCompra orden = obtenerO404(ordenId);
+		if (orden.getEstado() != EstadoOrdenCompra.PENDIENTE
+				&& orden.getEstado() != EstadoOrdenCompra.RECIBIDA_PARCIAL) {
+			throw new BusinessException("OC_ESTADO_INVALIDO", "Solo se puede cancelar una OC en PENDIENTE o RECIBIDA_PARCIAL");
+		}
+		orden.setEstado(EstadoOrdenCompra.CANCELADA);
+		ordenCompraRepository.save(orden);
+	}
+
+	@Override
+	public Optional<OrdenCompra> buscarPorId(Long id) {
+		return ordenCompraRepository.findById(id);
+	}
+
+	@Override
+	public List<OrdenCompra> listarTodas() {
+		return ordenCompraRepository.findAll();
+	}
+
+	@Override
+	public List<OrdenCompra> listarPorEstado(EstadoOrdenCompra estado) {
+		return ordenCompraRepository.findByEstado(estado);
+	}
+
+	@Override
+	public List<OrdenCompra> listarPorProveedor(Long proveedorId) {
+		return ordenCompraRepository.findByProveedorId(proveedorId);
+	}
+
+	private OrdenCompra obtenerO404(Long ordenId) {
+		return ordenCompraRepository.findById(ordenId)
+				.orElseThrow(() -> new NotFoundException("Orden de compra no encontrada: " + ordenId));
+	}
+}

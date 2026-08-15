@@ -10,6 +10,8 @@ public class Item {
 	private String unidadMedida;
 	private boolean activo = true;
 	private BigDecimal stockMinimo = BigDecimal.ZERO;
+	private BigDecimal precioLista = BigDecimal.ZERO;
+	private String categoria;
 
 	public Item() {
 	}
@@ -19,6 +21,7 @@ public class Item {
 		this.nombre = nombre;
 		this.unidadMedida = unidadMedida;
 		this.stockMinimo = BigDecimal.ZERO;
+		this.precioLista = BigDecimal.ZERO;
 	}
 
 	public void desactivar() {
@@ -71,5 +74,21 @@ public class Item {
 
 	public void setStockMinimo(BigDecimal stockMinimo) {
 		this.stockMinimo = stockMinimo;
+	}
+
+	public BigDecimal getPrecioLista() {
+		return precioLista;
+	}
+
+	public void setPrecioLista(BigDecimal precioLista) {
+		this.precioLista = precioLista;
+	}
+
+	public String getCategoria() {
+		return categoria;
+	}
+
+	public void setCategoria(String categoria) {
+		this.categoria = categoria;
 	}
 }

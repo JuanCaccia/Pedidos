@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +29,9 @@ public class RutaJpaEntity extends BaseEntity {
 
 	@Column(name = "fecha_jornada", nullable = false)
 	private LocalDate fechaJornada;
+
+	@Column(name = "capacidad_bultos", nullable = false, precision = 12, scale = 3)
+	private BigDecimal capacidadBultos = BigDecimal.ZERO;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 30)
@@ -70,6 +74,14 @@ public class RutaJpaEntity extends BaseEntity {
 
 	public void setFechaJornada(LocalDate fechaJornada) {
 		this.fechaJornada = fechaJornada;
+	}
+
+	public BigDecimal getCapacidadBultos() {
+		return capacidadBultos;
+	}
+
+	public void setCapacidadBultos(BigDecimal capacidadBultos) {
+		this.capacidadBultos = capacidadBultos;
 	}
 
 	public EstadoRuta getEstado() {

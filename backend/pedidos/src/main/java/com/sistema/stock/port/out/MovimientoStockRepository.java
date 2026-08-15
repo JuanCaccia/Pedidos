@@ -1,5 +1,6 @@
 package com.sistema.stock.port.out;
 
+import com.sistema.common.model.PageResponse;
 import com.sistema.stock.model.MovimientoStock;
 
 import java.util.List;
@@ -16,4 +17,6 @@ public interface MovimientoStockRepository {
 	List<MovimientoStock> findByLoteId(Long loteId);
 
 	List<MovimientoStock> findByPedidoId(Long pedidoId);
+
+	PageResponse<MovimientoStock> listarPaginado(Long itemId, int page, int size);
 }

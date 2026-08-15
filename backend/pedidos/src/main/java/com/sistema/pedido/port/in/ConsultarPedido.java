@@ -5,6 +5,7 @@ import com.sistema.pedido.model.EstadoPedido;
 import com.sistema.pedido.model.Pedido;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public interface ConsultarPedido {
@@ -20,6 +21,8 @@ public interface ConsultarPedido {
 	List<Pedido> listarPorVendedor(Long vendedorId);
 
 	List<Pedido> listarHijosDe(Long pedidoPadreId);
+
+	Map<EstadoPedido, Long> contadores();
 
 	PageResponse<Pedido> listarPaginado(EstadoPedido estado, Long clienteId, Long vendedorId, int page, int size);
 }

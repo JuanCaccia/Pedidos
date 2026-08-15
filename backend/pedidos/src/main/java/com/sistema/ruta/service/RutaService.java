@@ -13,6 +13,7 @@ import com.sistema.ruta.port.out.ZonaGateway;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -49,8 +50,14 @@ public class RutaService implements GestionarRuta, ConsultarRuta {
 		if (command.pedidoIds() == null || command.pedidoIds().isEmpty()) {
 			throw new BusinessException("VALIDATION_ERROR", "Una ruta debe tener al menos un pedido");
 		}
+		BigDecimal capacidad = command.capacidadBultos() == null ? BigDecimal.ZERO : command.capacidadBultos();
+		if (capacidad.signum() < 0) {
+			throw new BusinessException("VALIDATION_ERROR", "La capacidad no puede ser negativa");
+		}
 		Ruta ruta = new Ruta(command.zonaId(), command.repartidorId(), command.fechaJornada());
+		ruta.setCapacidadBultos(capacidad);
 		List<Long> sinDuplicados = command.pedidoIds().stream().distinct().toList();
+		validarCapacidad(ruta, sinDuplicados);
 		asignarPedidosValidados(sinDuplicados, command.zonaId());
 		ruta.asignarPedidos(sinDuplicados);
 		return rutaRepository.save(ruta);
@@ -66,6 +73,7 @@ public class RutaService implements GestionarRuta, ConsultarRuta {
 		List<Long> sinDuplicados = pedidoIds.stream().distinct()
 				.filter(id -> !ruta.getPedidoIds().contains(id))
 				.toList();
+		validarCapacidad(ruta, sinDuplicados);
 		asignarPedidosValidados(sinDuplicados, ruta.getZonaId());
 		ruta.asignarPedidos(sinDuplicados);
 		return rutaRepository.save(ruta);
@@ -73,18 +81,35 @@ public class RutaService implements GestionarRuta, ConsultarRuta {
 
 	private void asignarPedidosValidados(List<Long> pedidoIds, Long zonaId) {
 		for (Long pedidoId : pedidoIds) {
+			String numero = pedidoGateway.numeroDePedido(pedidoId);
 			if (!pedidoGateway.existePedido(pedidoId)) {
-				throw new NotFoundException("Pedido no encontrado: " + pedidoId);
+				throw new NotFoundException("El pedido " + numero + " no existe");
 			}
 			if (!pedidoGateway.estaDisponibleParaRuta(pedidoId)) {
 				throw new BusinessException("PEDIDO_NO_DISPONIBLE",
-						"El pedido " + pedidoId + " no está disponible para una ruta");
+						"El pedido " + numero + " no está disponible para una ruta");
 			}
 			if (!pedidoGateway.clientePerteneceAZona(pedidoId, zonaId)) {
 				throw new BusinessException("PEDIDO_ZONA_INCOMPATIBLE",
-						"El pedido " + pedidoId + " pertenece a un cliente fuera de la zona " + zonaId);
+						"El pedido " + numero + " pertenece a un cliente fuera de la zona " + zonaId);
 			}
 			pedidoGateway.asignarARuta(pedidoId);
+		}
+	}
+
+	private void validarCapacidad(Ruta ruta, List<Long> nuevos) {
+		if (ruta.getCapacidadBultos().signum() <= 0) {
+			return; // sin límite
+		}
+		java.util.List<Long> prospectivos = new java.util.ArrayList<>(ruta.getPedidoIds());
+		prospectivos.addAll(nuevos);
+		BigDecimal carga = BigDecimal.ZERO;
+		for (Long pedidoId : prospectivos.stream().distinct().toList()) {
+			carga = carga.add(pedidoGateway.unidadesDe(pedidoId));
+		}
+		if (carga.compareTo(ruta.getCapacidadBultos()) > 0) {
+			throw new BusinessException("RUTA_CAPACIDAD_EXCEDIDA",
+					"La ruta excede su capacidad: " + carga + " de " + ruta.getCapacidadBultos() + " bultos");
 		}
 	}
 

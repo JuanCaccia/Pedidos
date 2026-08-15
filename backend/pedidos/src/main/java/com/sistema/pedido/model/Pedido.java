@@ -16,6 +16,7 @@ public class Pedido {
 	private Long pedidoPadreId;
 	private EstadoPedido estado = EstadoPedido.PENDIENTE_CONFIRMACION;
 	private LocalDateTime fechaCreacion;
+	private LocalDateTime updatedAt;
 	private LocalDate fechaJornada;
 	private String observaciones;
 	private BigDecimal total = BigDecimal.ZERO;
@@ -101,6 +102,14 @@ public class Pedido {
 
 	public void setFechaCreacion(LocalDateTime fechaCreacion) {
 		this.fechaCreacion = fechaCreacion;
+	}
+
+	public LocalDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(LocalDateTime updatedAt) {
+		this.updatedAt = updatedAt;
 	}
 
 	public LocalDate getFechaJornada() {

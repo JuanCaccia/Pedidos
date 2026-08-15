@@ -6,6 +6,7 @@ import com.sistema.cliente.port.out.ClienteRepository;
 import com.sistema.cliente.port.out.ZonaRepository;
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
+import com.sistema.common.model.PageResponse;
 import com.sistema.common.model.Zona;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,7 @@ class ClienteServiceTest {
 		clienteService.crearCliente(new GestionarCliente.CrearClienteCommand("B S.A.", "20222222222", null, null, null, 1L));
 		clienteService.crearCliente(new GestionarCliente.CrearClienteCommand("C S.A.", "20333333333", null, null, null, 1L));
 
-		com.sistema.common.model.PageResponse<com.sistema.cliente.model.Cliente> pagina = clienteService.listarPaginado(null, 0, 2);
+		PageResponse<Cliente> pagina = clienteService.listarPaginado(null, null, 0, 2);
 
 		assertEquals(2, pagina.content().size());
 		assertEquals(3, pagina.totalElements());
@@ -138,6 +139,21 @@ class ClienteServiceTest {
 			return datos.values().stream()
 					.filter(c -> c.getZona() != null && c.getZona().getId().equals(zonaId))
 					.toList();
+		}
+
+		@Override
+		public PageResponse<Cliente> buscar(String q, Long zonaId, int page, int size) {
+			List<Cliente> todos = datos.values().stream()
+					.filter(c -> zonaId == null || (c.getZona() != null && c.getZona().getId().equals(zonaId)))
+					.filter(c -> q == null || q.isBlank()
+							|| c.getRazonSocial().toLowerCase().contains(q.toLowerCase())
+							|| c.getCuit().toLowerCase().contains(q.toLowerCase()))
+					.toList();
+			int total = todos.size();
+			int from = Math.min(page * size, total);
+			int to = Math.min(from + size, total);
+			int totalPages = size == 0 ? 0 : (total + size - 1) / size;
+			return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
 		}
 	}
 

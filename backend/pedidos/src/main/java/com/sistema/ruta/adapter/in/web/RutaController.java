@@ -39,7 +39,7 @@ public class RutaController {
 	@PostMapping
 	public ResponseEntity<RutaResponse> crear(@Valid @RequestBody RutaRequest request) {
 		Ruta ruta = gestionarRuta.crearRuta(new GestionarRuta.CrearRutaCommand(request.zonaId(),
-				request.repartidorId(), request.fechaJornada(), request.pedidoIds()));
+				request.repartidorId(), request.fechaJornada(), request.pedidoIds(), request.capacidadBultos()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(RutaResponse.from(ruta));
 	}
 

@@ -2,6 +2,10 @@ package com.sistema.ruta.port.out;
 
 public interface PedidoGateway {
 
+	java.math.BigDecimal unidadesDe(Long pedidoId);
+
+	String numeroDePedido(Long pedidoId);
+
 	boolean existePedido(Long pedidoId);
 
 	boolean estaDisponibleParaRuta(Long pedidoId);

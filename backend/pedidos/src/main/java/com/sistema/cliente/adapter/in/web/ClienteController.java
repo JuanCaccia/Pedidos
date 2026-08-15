@@ -8,9 +8,12 @@ import com.sistema.cliente.port.in.ConsultarCliente;
 import com.sistema.cliente.port.in.GestionarCliente;
 import com.sistema.common.exception.NotFoundException;
 import com.sistema.common.model.PageResponse;
+import com.sistema.common.util.CsvWriter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -21,6 +24,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 @RestController
 @RequestMapping("/clientes")
@@ -62,6 +69,25 @@ public class ClienteController {
 		return ResponseEntity.noContent().build();
 	}
 
+	@GetMapping("/exportar.csv")
+	public ResponseEntity<byte[]> exportarCsv(@RequestParam(required = false) Long zonaId) {
+		List<Cliente> clientes = zonaId == null ? consultarCliente.listarTodos()
+				: consultarCliente.listarPorZona(zonaId);
+		List<String> headers = List.of("id", "razonSocial", "cuit", "email", "telefono", "zonaNombre", "activo");
+		List<List<String>> filas = new ArrayList<>();
+		for (Cliente cliente : clientes) {
+			filas.add(java.util.Arrays.asList(String.valueOf(cliente.getId()), cliente.getRazonSocial(),
+					cliente.getCuit(), cliente.getEmail(), cliente.getTelefono(),
+					cliente.getZona() == null ? "" : cliente.getZona().getNombre(),
+					String.valueOf(cliente.isActivo())));
+		}
+		String csv = CsvWriter.escribir(headers, filas);
+		HttpHeaders responseHeaders = new HttpHeaders();
+		responseHeaders.setContentType(MediaType.parseMediaType("text/csv;charset=UTF-8"));
+		responseHeaders.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"clientes.csv\"");
+		return new ResponseEntity<>(csv.getBytes(StandardCharsets.UTF_8), responseHeaders, HttpStatus.OK);
+	}
+
 	@GetMapping("/{id}")
 	public ResponseEntity<ClienteResponse> buscarPorId(@PathVariable Long id) {
 		Cliente cliente = consultarCliente.buscarPorId(id)
@@ -77,9 +103,10 @@ public class ClienteController {
 	}
 
 	@GetMapping
-	public PageResponse<ClienteResponse> listar(@RequestParam(required = false) Long zonaId,
+	public PageResponse<ClienteResponse> listar(@RequestParam(required = false) String q,
+			@RequestParam(required = false) Long zonaId,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-		PageResponse<Cliente> pagina = consultarCliente.listarPaginado(zonaId, page, size);
+		PageResponse<Cliente> pagina = consultarCliente.listarPaginado(q, zonaId, page, size);
 		return new PageResponse<>(pagina.content().stream().map(ClienteResponse::from).toList(),
 				pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages());
 	}

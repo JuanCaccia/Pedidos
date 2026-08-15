@@ -1,5 +1,6 @@
 package com.sistema.usuario.port.in;
 
+import com.sistema.common.model.PageResponse;
 import com.sistema.usuario.model.Usuario;
 
 import java.util.List;
@@ -12,4 +13,6 @@ public interface ConsultarUsuario {
 	Optional<Usuario> buscarPorEmail(String email);
 
 	List<Usuario> listarTodos();
+
+	PageResponse<Usuario> listarPaginado(String q, int page, int size);
 }

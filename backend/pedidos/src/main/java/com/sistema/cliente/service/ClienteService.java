@@ -89,19 +89,8 @@ public class ClienteService implements GestionarCliente, ConsultarCliente {
 	}
 
 	@Override
-	public PageResponse<Cliente> listarPaginado(Long zonaId, int page, int size) {
-		List<Cliente> todos = zonaId == null
-				? clienteRepository.findAll()
-				: clienteRepository.findByZonaId(zonaId);
-		return paginar(todos, page, size);
-	}
-
-	private <T> PageResponse<T> paginar(List<T> todos, int page, int size) {
-		int total = todos.size();
-		int from = Math.min(page * size, total);
-		int to = Math.min(from + size, total);
-		int totalPages = size == 0 ? 0 : (total + size - 1) / size;
-		return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
+	public PageResponse<Cliente> listarPaginado(String q, Long zonaId, int page, int size) {
+		return clienteRepository.buscar(q, zonaId, page, size);
 	}
 
 	private Cliente obtenerClienteO404(Long clienteId) {

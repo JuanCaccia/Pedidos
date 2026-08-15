@@ -1,5 +1,6 @@
 package com.sistema.stock.port.out;
 
+import com.sistema.common.model.PageResponse;
 import com.sistema.stock.model.Item;
 
 import java.util.List;
@@ -14,4 +15,8 @@ public interface ItemRepository {
 	Optional<Item> findBySku(String sku);
 
 	List<Item> findAll();
+
+	PageResponse<Item> buscar(String q, String categoria, int page, int size);
+
+	List<String> listarCategorias();
 }

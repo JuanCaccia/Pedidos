@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 
 public interface AjustarInventario {
 
-	record AjusteInventarioCommand(Long itemId, BigDecimal cantidad, String motivo) {
+	record AjusteInventarioCommand(Long itemId, BigDecimal cantidad, String motivo, com.sistema.usuario.model.Usuario actor) {
 	}
 
 	MovimientoStock ajustarInventario(AjusteInventarioCommand command);

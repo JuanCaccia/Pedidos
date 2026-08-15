@@ -43,7 +43,7 @@ class PedidosIntegrationTest {
 
 		mockMvc.perform(get("/usuarios").header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[0].email").exists());
+				.andExpect(jsonPath("$.content[0].email").exists());
 	}
 
 	@Test
@@ -87,5 +87,43 @@ class PedidosIntegrationTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
 				.andExpect(jsonPath("$.fieldErrors.clienteId").exists());
+	}
+
+	@Test
+	void repartidorNoPuedeCrearItemsNiClientes() throws Exception {
+		String login = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"repartidor@pedidos.com\",\"password\":\"repartidor123\"}"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		String token = JsonPath.read(login, "$.token");
+
+		mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"R-X\",\"nombre\":\"Repartidor item\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isForbidden());
+
+		mockMvc.perform(post("/clientes")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"razonSocial\":\"Repartidor Cliente\",\"cuit\":\"30112233440\",\"email\":\"r@x.com\"}"))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void encargadoDepositoPuedeCrearItems() throws Exception {
+		String login = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"admin@pedidos.com\",\"password\":\"admin123\"}"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		String token = JsonPath.read(login, "$.token");
+
+		mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"A-ADMIN\",\"nombre\":\"Admin item\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isCreated());
 	}
 }

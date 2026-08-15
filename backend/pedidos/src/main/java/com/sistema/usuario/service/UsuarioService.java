@@ -2,6 +2,7 @@ package com.sistema.usuario.service;
 
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
+import com.sistema.common.model.PageResponse;
 import com.sistema.usuario.model.Rol;
 import com.sistema.usuario.model.Usuario;
 import com.sistema.usuario.port.in.ConsultarUsuario;
@@ -77,6 +78,11 @@ public class UsuarioService implements GestionarUsuario, ConsultarUsuario {
 	@Override
 	public List<Usuario> listarTodos() {
 		return usuarioRepository.findAll();
+	}
+
+	@Override
+	public PageResponse<Usuario> listarPaginado(String q, int page, int size) {
+		return usuarioRepository.buscar(q, page, size);
 	}
 
 	@Override

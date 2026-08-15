@@ -4,8 +4,11 @@ import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
 import com.sistema.pedido.port.out.StockGateway;
 import com.sistema.stock.adapter.out.persistence.ItemJpaRepository;
+import com.sistema.stock.model.Item;
 import com.sistema.stock.model.MovimientoStock;
 import com.sistema.stock.model.TipoMovimiento;
+import com.sistema.stock.port.in.GestionarMerma;
+import com.sistema.stock.port.in.RegistrarIngreso;
 import com.sistema.stock.port.out.MovimientoStockRepository;
 import com.sistema.stock.service.StockService;
 import org.springframework.stereotype.Component;
@@ -13,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Component
 public class StockGatewayImpl implements StockGateway {
@@ -20,12 +24,14 @@ public class StockGatewayImpl implements StockGateway {
 	private final StockService stockService;
 	private final ItemJpaRepository itemJpaRepository;
 	private final MovimientoStockRepository movimientoStockRepository;
+	private final RegistrarIngreso registrarIngreso;
 
 	public StockGatewayImpl(StockService stockService, ItemJpaRepository itemJpaRepository,
-			MovimientoStockRepository movimientoStockRepository) {
+			MovimientoStockRepository movimientoStockRepository, RegistrarIngreso registrarIngreso) {
 		this.stockService = stockService;
 		this.itemJpaRepository = itemJpaRepository;
 		this.movimientoStockRepository = movimientoStockRepository;
+		this.registrarIngreso = registrarIngreso;
 	}
 
 	@Override
@@ -63,7 +69,49 @@ public class StockGatewayImpl implements StockGateway {
 	@Override
 	@Transactional
 	public void egresar(Long itemId, Long pedidoId, BigDecimal cantidad) {
-		movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.EGRESO_VENTA, itemId, null, pedidoId,
-				cantidad, LocalDateTime.now(), "Egreso por venta del pedido " + pedidoId));
+		stockService.egresarPorLotes(itemId, pedidoId, cantidad);
+	}
+
+	@Override
+	public List<Long> listarLoteIdsDisponibles(Long itemId) {
+		return stockService.listarLotes(itemId).stream()
+				.filter(lote -> disponibleDeLote(itemId, lote.getId()).signum() > 0)
+				.map(com.sistema.stock.model.Lote::getId)
+				.toList();
+	}
+
+	@Override
+	@Transactional
+	public void registrarMerma(Long itemId, Long loteId, BigDecimal cantidad, String motivo) {
+		stockService.registrarMerma(new GestionarMerma.RegistrarMermaCommand(itemId, loteId, cantidad, motivo));
+	}
+
+	@Override
+	@Transactional
+	public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo) {
+		registrarIngreso.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
+				itemId, codigoLote, null, cantidad, motivo));
+	}
+
+	@Override
+	public BigDecimal consultarPrecioLista(Long itemId) {
+		return stockService.buscarItemPorId(itemId)
+				.map(Item::getPrecioLista)
+				.orElse(BigDecimal.ZERO);
+	}
+
+	private BigDecimal disponibleDeLote(Long itemId, Long loteId) {
+		List<MovimientoStock> movimientos = movimientoStockRepository.findByItemIdOrderByFechaAsc(itemId);
+		BigDecimal ingresos = sumarPorLote(movimientos, TipoMovimiento.INGRESO, loteId);
+		BigDecimal egresos = sumarPorLote(movimientos, TipoMovimiento.EGRESO_VENTA, loteId);
+		BigDecimal mermas = sumarPorLote(movimientos, TipoMovimiento.MERMA, loteId);
+		return ingresos.subtract(egresos).subtract(mermas);
+	}
+
+	private BigDecimal sumarPorLote(List<MovimientoStock> movimientos, TipoMovimiento tipo, Long loteId) {
+		return movimientos.stream()
+				.filter(m -> m.getTipo() == tipo && loteId.equals(m.getLoteId()))
+				.map(MovimientoStock::getCantidad)
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
 }

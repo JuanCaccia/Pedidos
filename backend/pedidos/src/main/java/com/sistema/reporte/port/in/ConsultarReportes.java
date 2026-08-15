@@ -6,6 +6,19 @@ import java.util.List;
 
 public interface ConsultarReportes {
 
+	record PorFormaPago(String formaPago, BigDecimal monto, long cantidad) {
+	}
+
+	record PorDia(LocalDate fecha, BigDecimal monto, long cantidad) {
+	}
+
+	record PorVendedor(Long vendedorId, String vendedorNombre, BigDecimal monto, long cantidad) {
+	}
+
+	record ResumenCaja(BigDecimal totalCobrado, long cantidadCobranzas,
+			List<PorFormaPago> porFormaPago, List<PorDia> porDia, List<PorVendedor> porVendedor) {
+	}
+
 	record ItemStockReporte(Long itemId, String sku, String nombre, BigDecimal disponible, BigDecimal reservasActivas) {
 	}
 
@@ -22,4 +35,6 @@ public interface ConsultarReportes {
 	List<VentaVendedorReporte> ventasPorVendedor(Long vendedorId, LocalDate desde, LocalDate hasta);
 
 	List<RutaReporte> rutasPorFecha(LocalDate fecha);
+
+	ResumenCaja resumenCaja(LocalDate desde, LocalDate hasta);
 }

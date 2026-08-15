@@ -10,7 +10,7 @@
   `pedido` (circuito con `PENDIENTE_STOCK`, pedido hijo), `ruta` (despacho +
   asignación), `compra` (proveedores + OC con recepción → stock), `cobranza`
   (remitos + cobranzas + cuenta de cliente), `reporte` (stock/ventas/rutas/caja),
-  `sustitucion`, `notificacion`, seguridad JWT + BCrypt, auditoría, springdoc. **142 tests**.
+  `sustitucion`, `notificacion`, seguridad JWT + BCrypt, auditoría, springdoc, actuator (health/info). **148 tests**.
 - **Frontend** completo: login, Dashboard (alertas: stock bajo, pendientes,
   re-agendados, lotes por vencer), Pedidos (cliente+zona, acciones por rol),
   Stock (operativo), Clientes/Items/Usuarios/Proveedores (ABMC), Rutas +
@@ -18,6 +18,7 @@
   auditado con Impeccable.
 - Migraciones Flyway V1→V16 · Dockerfile backend/frontend + compose · CI en
   GitHub Actions · App local en containers Podman (`:8080/api` + `:3000`).
+- Observabilidad base (D3): `/actuator/health` público (con liveness/readiness y detalles DB por rol), `/actuator/info` solo `ADMINISTRATIVO`.
 
 ---
 
@@ -69,3 +70,8 @@ multi-empresa, integraciones externas (AFIP, pasarelas de pago).
 ### D2 — Pedido Express ✅ COMPLETA
 - Flag `express` (default false) en Pedido (V16), prioridad en cola de preparación/despacho
   (`express DESC, fecha_creacion ASC`), badge Express en UI y checkbox al crear.
+
+### D3 — Integridad de datos (P2) + Observabilidad base ✅ COMPLETA
+- QA-04: validación en cascada `@Valid` en `CrearPedidoRequest.items` y `EntregaRequest.entregas`; `cantidadEntregada` `@Positive`.
+- QA-13: sustitución valida que `itemOriginalId` pertenezca al pedido (`ITEM_NO_PERTENECE_AL_PEDIDO`) antes de tocar stock.
+- Actuator: `spring-boot-starter-actuator`; `/actuator/health` (y probes liveness/readiness) público, `/actuator/info` y resto `/actuator/**` solo `ADMINISTRATIVO`; `show-details: when-authorized`; metadata `info.app`.

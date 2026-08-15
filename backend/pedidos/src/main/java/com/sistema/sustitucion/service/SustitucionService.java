@@ -52,6 +52,10 @@ public class SustitucionService implements RegistrarSustitucion {
 		if (command.itemOriginalId().equals(command.itemSustitutoId())) {
 			throw new BusinessException("MISMO_ITEM", "El ítem original y el sustituto no pueden ser el mismo");
 		}
+		if (pedido.itemPorItem(command.itemOriginalId()).isEmpty()) {
+			throw new BusinessException("ITEM_NO_PERTENECE_AL_PEDIDO",
+					"El ítem " + command.itemOriginalId() + " no pertenece al pedido " + command.pedidoId());
+		}
 
 		BigDecimal precioOriginal = stockGateway.consultarPrecioLista(command.itemOriginalId());
 		BigDecimal precioSustituto = stockGateway.consultarPrecioLista(command.itemSustitutoId());

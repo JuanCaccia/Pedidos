@@ -23,6 +23,28 @@ server:
   servlet:
     context-path: /api
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: Pedidos API
+    description: Sistema de pedidos, stock y ventas
+    version: 1.0.0
+  build:
+    java: ${java.version}
+
 app:
   jwt:
     secret: ${JWT_SECRET:cambiar-en-produccion-esta-clave-secreta-jwt-2026}

@@ -79,13 +79,13 @@
 - **Evidencia:** verificado live (404 / 405) + tests `recursoInexistenteDevuelve404`, `metodoNoSoportadoDevuelve405`.
 - **Origen:** QA-01 · **Milestone:** C8 / Fase D · **Estado:** resuelto
 
-### QA-04 — Validación anidada ausente en pedidos/entregas
+### QA-04 — Validación anidada ausente en pedidos/entregas ✅ RESUELTO
 
 - **Tipo:** bug · **Prioridad:** P2 · **Área:** validación
 - **Repro:** `CrearPedidoRequest.items` sin `@Valid` (línea sin itemId → 500); `EntregaRequest` sin validación (cantidad negativa → 409 en vez de 400).
-- **Esperado:** 400 con `fieldErrors`. **Actual:** 500/409 inconsistente.
-- **AC:** `@Valid` en listas anidadas; `EntregaRequest` validado.
-- **Origen:** QA-04 · **Milestone:** C8 · **Estado:** backlog
+- **Esperado:** 400 con `fieldErrors`. **Actual:** ✅ Resuelto — `@NotEmpty @Valid` en `CrearPedidoRequest.items` y `EntregaRequest.entregas`; `EntregaLineaRequest.cantidadEntregada` a `@Positive`.
+- **Evidencia:** verificado live (400 con `fieldErrors['items[0].itemId']`) + tests `pedidoConLineaSinItemIdDevuelve400`, `entregaConListaVaciaDevuelve400`, `entregaConCantidadCeroDevuelve400`.
+- **Origen:** QA-04 · **Milestone:** C8 / Fase D · **Estado:** resuelto
 
 ### QA-05 — `POST /sustituciones` sin `@Valid` → 500 con body malformado ✅ RESUELTO
 
@@ -135,13 +135,14 @@
 - **AC:** propagar fechaJornada y normalizar escala monetaria.
 - **Origen:** QA-12 · **Milestone:** C8 · **Estado:** backlog
 
-### QA-13 — La sustitución no verifica que el ítem original pertenezca/esté entregado
+### QA-13 — La sustitución no verifica que el ítem original pertenezca/esté entregado ✅ RESUELTO
 
 - **Tipo:** mejora / deuda técnica · **Prioridad:** P2 · **Área:** sustituciones
-- **Repro:** `SustitucionService` no valida que `itemOriginalId` sea un ítem del pedido entregado; riesgo de movimientos espurios + cobranza arbitraria.
+- **Repro:** `SustitucionService` no validaba que `itemOriginalId` sea un ítem del pedido; riesgo de movimientos espurios + cobranza arbitraria.
 - **Esperado:** validar membresía del ítem original.
-- **AC:** rechazar sustituciones de ítems no entregados en el pedido.
-- **Origen:** QA-13 · **Milestone:** C8 · **Estado:** backlog
+- **Actual:** ✅ Resuelto — `SustitucionService` valida `pedido.itemPorItem(itemOriginalId)` → `ITEM_NO_PERTENECE_AL_PEDIDO` antes de tocar stock.
+- **Evidencia:** verificado live (409 `ITEM_NO_PERTENECE_AL_PEDIDO` sin registrar ingreso/ajuste) + test `sustituirItemAjenoAlPedidoLanza`.
+- **Origen:** QA-13 · **Milestone:** C8 / Fase D · **Estado:** resuelto
 
 ---
 

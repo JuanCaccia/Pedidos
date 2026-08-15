@@ -7,6 +7,7 @@ import com.sistema.common.exception.BusinessException;
 import com.sistema.common.model.PageResponse;
 import com.sistema.pedido.model.EstadoPedido;
 import com.sistema.pedido.model.Pedido;
+import com.sistema.pedido.model.PedidoItem;
 import com.sistema.pedido.port.in.ConsultarPedido;
 import com.sistema.sustitucion.model.Sustitucion;
 import com.sistema.sustitucion.port.in.RegistrarSustitucion.SustituirCommand;
@@ -53,7 +54,7 @@ class SustitucionServiceTest {
 		registrarCobranza = new FakeRegistrarCobranza();
 		ajustarInventario = new FakeAjustarInventario();
 		sustitucionService = new SustitucionService(sustitucionRepository, stockGateway,
-				new FakeConsultarPedido(EstadoPedido.ENTREGADO), registrarCobranza, ajustarInventario);
+				new FakeConsultarPedido(EstadoPedido.ENTREGADO, List.of(1L)), registrarCobranza, ajustarInventario);
 	}
 
 	@Test
@@ -99,6 +100,16 @@ class SustitucionServiceTest {
 				new SustituirCommand(10L, 1L, 1L, new BigDecimal("1"), null, actor)));
 	}
 
+	@Test
+	void sustituirItemAjenoAlPedidoLanza() {
+		// El pedido solo contiene el item 1; sustituir el item 99 (ajeno) debe rechazarse
+		// antes de tocar stock.
+		assertThrows(BusinessException.class, () -> sustitucionService.sustituir(
+				new SustituirCommand(10L, 99L, 2L, new BigDecimal("1"), null, actor)));
+		assertEquals(0, stockGateway.ingresos.size(), "No debe registrar ingreso si el item no pertenece al pedido");
+		assertEquals(0, ajustarInventario.ajustes.size(), "No debe ajustar stock si el item no pertenece al pedido");
+	}
+
 	private record RegistroIngreso(Long itemId, BigDecimal cantidad, String motivo) {
 	}
 
@@ -108,9 +119,15 @@ class SustitucionServiceTest {
 	private static class FakeConsultarPedido implements ConsultarPedido {
 
 		private final EstadoPedido estado;
+		private final List<Long> itemIds;
 
 		FakeConsultarPedido(EstadoPedido estado) {
+			this(estado, List.of());
+		}
+
+		FakeConsultarPedido(EstadoPedido estado, List<Long> itemIds) {
 			this.estado = estado;
+			this.itemIds = itemIds;
 		}
 
 		@Override
@@ -119,6 +136,9 @@ class SustitucionServiceTest {
 			pedido.setId(id);
 			pedido.setClienteId(7L);
 			pedido.setEstado(estado);
+			for (Long itemId : itemIds) {
+				pedido.agregarItem(new PedidoItem(itemId, new BigDecimal("1"), new BigDecimal("5.00")));
+			}
 			return Optional.of(pedido);
 		}
 

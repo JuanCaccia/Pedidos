@@ -5,11 +5,11 @@
 
 ## Current Milestone
 
-**Fase D — Cimientos técnicos, resiliencia y QA (D1, D2 completas)**
+**Fase D — Cimientos técnicos, resiliencia y QA (D1, D2, D3 completas)**
 
 ## Status
 
-**FUNCIONAL — Fase C cerrada; Fase D D1 (resiliencia) y D2 (express) completas; 142 tests verdes**
+**FUNCIONAL — Fase C cerrada; Fase D D1 (resiliencia), D2 (express) y D3 (integridad + observabilidad) completas; 148 tests verdes**
 
 ## Milestone Objective
 
@@ -23,7 +23,7 @@ TTL de reservas, consolidación, export CSV).
 
 La mayoría de los flujos centrales **funcionan y son consistentes** entre backend y frontend
 (ciclo de pedido, consolidación, OC/recepción, cobranzas, faltantes+notificaciones, CSV,
-TTL config). Backend: **135 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
+TTL config). Backend: **148 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
 Los dos bloqueantes P1 de C8 (BUG-002 autorización, BUG-003 sustitución con diferencia
 negativa) fueron **resueltos y verificados en vivo**. Persisten como P1: BUG-004 (cierre de
 jornada con EN_VIAJE colgados) y BUG-005 (decisión de alcance "pedido express"). Además
@@ -71,14 +71,14 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 * **BUG-003 (P1):** ~~Sustitución con diferencia negativa → 409 y revierte~~ → **RESUELTO y verificado** (201, cobranza con signo).
 * **BUG-004 (P1):** Se cierra jornada con pedidos EN_VIAJE colgados. (QA)
 * QA-01 (P2): rutas inexistentes/método incorrecto → 500 en vez de 404/405.
-* QA-04 (P2): validación anidada ausente en pedidos/entregas.
+* QA-04 (P2): ~~validación anidada ausente~~ → **RESUELTO** (@Valid anidado).
 * QA-05 (P2): POST /sustituciones malformado → 500.
-* QA-13 (P2): sustitución no valida membresía del ítem original.
+* QA-13 (P2): ~~sustitución sin validar membresía~~ → **RESUELTO** (ITEM_NO_PERTENECE_AL_PEDIDO).
 
 ## Known Limitations
 
 * Sin soporte offline.
-* Sin monitoreo/actuator de producción (Fase D).
+* Sin monitoreo/actuator de producción (Fase D). — ✅ D3: actuator base (health/info) implementado; faltan métricas avanzadas/actuator/metrics.
 * Sin tests e2e (Playwright) (Fase D).
 * Sin tests del frontend (ningún test unit/e2e FE).
 * JWT_SECRET con default inseguro en dev.
@@ -135,7 +135,7 @@ completed: yes (subagente + verificación manual de bloqueantes)
 result: 2 bloqueantes (BUG-002, BUG-003) RESUELTOS y verificados + 13 hallazgos (QA-01..13) + STR
 
 Automated tests:
-- Backend: **135 tests, 0 fallos** (surefire).
+- Backend: **148 tests, 0 fallos** (surefire).
 - Frontend: **sin tests**.
 
 End-to-end verification:
@@ -152,7 +152,7 @@ Critical:
 * ~~BUG-002~~ · ~~BUG-003~~ — resueltos y verificados
 
 Important:
-* QA-01, QA-04, QA-05, QA-09, QA-10, QA-13 (P2)
+* QA-01, QA-05, QA-09, QA-10 (P2) · QA-04, QA-13 — resueltos
 
 Future:
 * QA-08, QA-11, QA-12 (P3) · STR-002 (docs) · STR-003 (limpieza datos QA)
@@ -173,7 +173,7 @@ optimización de reportes, multi-depósito/empresa) — tras resolver bloqueante
 
 1. Resolver BUG-004 (validar cierre de jornada sin EN_VIAJE colgados).
 2. Definir alcance de "pedido express" (BUG-005).
-3. Actualizar ROADMAP.md (STR-002): conteos 135 tests, migraciones V1→V15, estado de C8.
+3. Actualizar ROADMAP.md (STR-002): conteos 148 tests, migraciones V1→V16, estado Fase D.
 4. Limpiar datos de QA en BD local (STR-003).
 
 ## Notes for Future Agents

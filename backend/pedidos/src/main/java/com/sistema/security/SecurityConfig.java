@@ -33,7 +33,8 @@ public class SecurityConfig {
 				.csrf(csrf -> csrf.disable())
 				.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/auth/login", "/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+						.requestMatchers("/auth/login", "/health", "/actuator/health", "/actuator/health/**",
+								"/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 						.requestMatchers(HttpMethod.PUT, "/usuarios/*/password").authenticated()
 						.requestMatchers("/usuarios/**").hasRole("ADMINISTRATIVO")
 						.requestMatchers(HttpMethod.POST, "/pedidos").hasAnyRole("VENDEDOR", "ADMINISTRATIVO")
@@ -56,6 +57,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/cobranzas").hasAnyRole("VENDEDOR", "ADMINISTRATIVO")
 						.requestMatchers("/proveedores/**", "/ordenes-compra/**").hasAnyRole("ENCARGADO_DEPOSITO", "ADMINISTRATIVO")
 						.requestMatchers(HttpMethod.POST, "/sustituciones").hasAnyRole("REPARTIDOR", "ADMINISTRATIVO")
+						.requestMatchers("/actuator/**").hasRole("ADMINISTRATIVO")
 						.anyRequest().authenticated())
 				.exceptionHandling(eh -> eh
 						.authenticationEntryPoint((request, response, ex) -> {

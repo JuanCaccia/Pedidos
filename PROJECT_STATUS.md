@@ -160,7 +160,9 @@ Future:
 ## Checkpoint
 
 Commit:
-- (pendiente — requiere decisión sobre STR-001 antes de commitear; ver Fase 14)
+- **e04061f** `checkpoint: close milestone Fase C (C1-C8)` — pusheado a `origin/main`
+- frontend integrado al repo padre como carpeta normal (53 archivos; gitlink eliminado)
+- working tree limpio salvo `ROADMAP.md` (STR-002, pendiente de actualizar)
 
 ## Next Milestone
 
@@ -169,16 +171,15 @@ optimización de reportes, multi-depósito/empresa) — tras resolver bloqueante
 
 ## Recommended Next Action
 
-1. **STR-001:** decidir cómo versionar el frontend (submódulo con remote vs integrado) y
-   commitear el trabajo real antes de cualquier checkpoint — prioridad máxima por riesgo de pérdida.
-2. Resolver BUG-004 (validar cierre de jornada sin EN_VIAJE colgados).
-3. Definir alcance de "pedido express" (BUG-005).
-4. Limpiar datos de QA (STR-003) y actualizar ROADMAP (STR-002).
+1. Resolver BUG-004 (validar cierre de jornada sin EN_VIAJE colgados).
+2. Definir alcance de "pedido express" (BUG-005).
+3. Actualizar ROADMAP.md (STR-002): conteos 135 tests, migraciones V1→V15, estado de C8.
+4. Limpiar datos de QA en BD local (STR-003).
 
 ## Notes for Future Agents
 
-* El repo padre tiene solo 2 commits; **todo el trabajo A/B/C está sin commitear** en el working
-  tree del repo padre, y **el frontend completo está en un repo anidado sin commitear** y sin
-  remote. Verificar estado de git ANTES de asumir que existe un checkpoint/historial.
+* El repo padre ahora tiene 3 commits; el checkpoint `e04061f` cierra Fase C e integra el
+  frontend como carpeta normal (antes era un gitlink a un commit vacío, sin submódulo ni remote).
+* El trabajo de Fase A está en los 2 primeros commits; Fase B y C en el checkpoint.
 * Los tests pasan contra Postgres local (`jdbc:postgresql://localhost:5432/pedidos`).
 * Aplicar los criterios de aceptación de BACKLOG.md; no usar Engram como backlog.

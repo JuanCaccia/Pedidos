@@ -134,6 +134,14 @@ public class RutaService implements GestionarRuta, ConsultarRuta {
 		if (ruta.getEstado() != EstadoRuta.EN_CURSO) {
 			throw new BusinessException("RUTA_ESTADO_INVALIDO", "Solo las rutas EN_CURSO pueden cerrarse");
 		}
+		List<Long> enViaje = ruta.getPedidoIds().stream()
+				.filter(pedidoGateway::estaEnViaje)
+				.toList();
+		if (!enViaje.isEmpty()) {
+			String numeros = enViaje.stream().map(pedidoGateway::numeroDePedido).collect(java.util.stream.Collectors.joining(", "));
+			throw new BusinessException("PEDIDOS_EN_VIAJE",
+					"No se puede cerrar la jornada: los pedidos " + numeros + " siguen en viaje");
+		}
 		ruta.cerrarJornada();
 		return rutaRepository.save(ruta);
 	}

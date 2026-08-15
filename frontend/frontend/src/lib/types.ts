@@ -154,6 +154,7 @@ export interface Pedido {
   fechaJornada: string | null;
   observaciones: string | null;
   total: number;
+  express: boolean;
   items: PedidoItem[];
 }
 

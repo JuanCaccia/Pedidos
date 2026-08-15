@@ -15,4 +15,6 @@ public interface PedidoGateway {
 	void asignarARuta(Long pedidoId);
 
 	void iniciarViaje(Long pedidoId);
+
+	boolean estaEnViaje(Long pedidoId);
 }

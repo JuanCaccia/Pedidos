@@ -9,7 +9,7 @@ public class PedidoMapper {
 
 	public Pedido toDomain(PedidoJpaEntity entity) {
 		Pedido pedido = new Pedido(entity.getClienteId(), entity.getVendedorId(), entity.getFechaJornada(),
-				entity.getObservaciones(), new ArrayList<>());
+				entity.getObservaciones(), entity.isExpress(), new ArrayList<>());
 		pedido.setId(entity.getId());
 		pedido.setNumero(entity.getNumero());
 		pedido.setPedidoPadreId(entity.getPedidoPadreId());
@@ -32,7 +32,7 @@ public class PedidoMapper {
 	public PedidoJpaEntity toJpa(Pedido pedido) {
 		PedidoJpaEntity entity = new PedidoJpaEntity(pedido.getNumero(), pedido.getClienteId(),
 				pedido.getVendedorId(), pedido.getPedidoPadreId(), pedido.getEstado(), pedido.getFechaCreacion(),
-				pedido.getFechaJornada(), pedido.getObservaciones(), pedido.getTotal());
+				pedido.getFechaJornada(), pedido.getObservaciones(), pedido.getTotal(), pedido.isExpress());
 		if (pedido.getId() != null) {
 			entity.setId(pedido.getId());
 		}

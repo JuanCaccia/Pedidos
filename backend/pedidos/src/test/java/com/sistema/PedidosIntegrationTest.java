@@ -126,4 +126,47 @@ class PedidosIntegrationTest {
 						.content("{\"sku\":\"A-ADMIN\",\"nombre\":\"Admin item\",\"unidadMedida\":\"UN\"}"))
 				.andExpect(status().isCreated());
 	}
+
+	@Test
+	void recursoInexistenteDevuelve404() throws Exception {
+		String login = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"admin@pedidos.com\",\"password\":\"admin123\"}"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		String token = JsonPath.read(login, "$.token");
+
+		mockMvc.perform(get("/nonexistent").header("Authorization", "Bearer " + token))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+	}
+
+	@Test
+	void metodoNoSoportadoDevuelve405() throws Exception {
+		String login = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"admin@pedidos.com\",\"password\":\"admin123\"}"))
+				.andReturn().getResponse().getContentAsString();
+		String token = JsonPath.read(login, "$.token");
+
+		mockMvc.perform(get("/stock/mermas").header("Authorization", "Bearer " + token))
+				.andExpect(status().isMethodNotAllowed())
+				.andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
+	}
+
+	@Test
+	void sustitucionConBodyVacioDevuelve400() throws Exception {
+		String login = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"admin@pedidos.com\",\"password\":\"admin123\"}"))
+				.andReturn().getResponse().getContentAsString();
+		String token = JsonPath.read(login, "$.token");
+
+		mockMvc.perform(post("/sustituciones")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+	}
 }

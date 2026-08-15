@@ -74,4 +74,11 @@ public class PedidoGatewayImpl implements PedidoGateway {
 	public void iniciarViaje(Long pedidoId) {
 		gestionarLogisticaPedido.iniciarViaje(pedidoId);
 	}
+
+	@Override
+	public boolean estaEnViaje(Long pedidoId) {
+		return consultarPedido.buscarPorId(pedidoId)
+				.map(p -> p.getEstado() == EstadoPedido.EN_VIAJE)
+				.orElse(false);
+	}
 }

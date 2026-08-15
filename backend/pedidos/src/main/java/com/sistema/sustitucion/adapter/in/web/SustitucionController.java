@@ -8,6 +8,7 @@ import com.sistema.sustitucion.port.in.RegistrarSustitucion;
 import com.sistema.sustitucion.port.in.RegistrarSustitucion.SustituirCommand;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,7 +29,7 @@ public class SustitucionController {
 
 	@PostMapping
 	@Operation(summary = "Registra una sustitución en destino y ajusta el cierre del camión")
-	public ResponseEntity<SustitucionResponse> sustituir(@RequestBody SustituirRequest request) {
+	public ResponseEntity<SustitucionResponse> sustituir(@Valid @RequestBody SustituirRequest request) {
 		Sustitucion sustitucion = registrarSustitucion.sustituir(new SustituirCommand(request.pedidoId(),
 				request.itemOriginalId(), request.itemSustitutoId(), request.cantidad(), request.observaciones(),
 				obtenerActorActual()));

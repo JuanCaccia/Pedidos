@@ -79,7 +79,7 @@ public class PedidoController {
 		List<LineaPedidoCommand> lineas = request.items().stream()
 				.map(l -> new LineaPedidoCommand(l.itemId(), l.cantidad(), l.precioUnitario())).toList();
 		Pedido pedido = crearPedido.crearPedido(new CrearPedidoCommand(request.clienteId(), request.vendedorId(),
-				request.fechaJornada(), request.observaciones(), lineas));
+				request.fechaJornada(), request.observaciones(), Boolean.TRUE.equals(request.express()), lineas));
 		return ResponseEntity.status(HttpStatus.CREATED).body(PedidoResponse.from(pedido));
 	}
 

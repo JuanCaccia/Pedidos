@@ -71,7 +71,7 @@ class ReporteServiceTest {
 	}
 
 	private Pedido pedidoEntregado(Long vendedorId, BigDecimal entregada, BigDecimal precio, LocalDateTime fecha) {
-		Pedido p = new Pedido(1L, vendedorId, null, null, new ArrayList<>());
+		Pedido p = new Pedido(1L, vendedorId, null, null, false, new ArrayList<>());
 		p.setEstado(EstadoPedido.ENTREGADO);
 		p.setFechaCreacion(fecha);
 		PedidoItem item = new PedidoItem(1L, entregada, precio);

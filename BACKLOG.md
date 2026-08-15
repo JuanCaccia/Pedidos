@@ -40,45 +40,44 @@
 
 ## IMPORTANT (P1 — a revisar, no bloquean el cierre formal pendiente de triage)
 
-### BUG-004 — Se puede cerrar la jornada con pedidos aún EN_VIAJE
+### BUG-004 — Se puede cerrar la jornada con pedidos aún EN_VIAJE ✅ RESUELTO
 
 - **Tipo:** bug
-- **Prioridad:** P1 (integridad de rutas) — verificado por QA
+- **Prioridad:** P1 (integridad de rutas)
 - **Área:** rutas
-- **Estado:** backlog
+- **Estado:** resuelto (2026-08-15) — verificado live
 - **Origen:** QA exploratorio (QA-06)
-- **Descripción:** `RutaService.cerrarJornada` no valida que no queden pedidos `EN_VIAJE` en la ruta. Se cierra la ruta `FINALIZADA` y quedan pedidos `EN_VIAJE` "colgados" en forma permanente salvo re-agendar/rechazar manual. El frontend sí guarda; la API no.
-- **Comportamiento esperado:** cerrar solo si todos los pedidos fueron entregados, o transición consistente documentada.
-- **Comportamiento actual:** cierra con entregas pendientes.
-- **Criterios de aceptación:** backend rechaza cierre con `EN_VIAJE` pendientes (o define política explícita).
-- **Bloquea milestone:** No
-- **Milestone:** C8
+- **Descripción:** `RutaService.cerrarJornada` no validaba que no queden pedidos `EN_VIAJE`. Se cerraba la ruta `FINALIZADA` dejando pedidos `EN_VIAJE` "colgados".
+- **Comportamiento esperado:** cerrar solo si todos los pedidos fueron entregados.
+- **Comportamiento actual:** ✅ Resuelto. `PedidoGateway.estaEnViaje` + validación en `cerrarJornada`: lanza `PEDIDOS_EN_VIAJE` listando los números cuando hay pedidos en viaje.
+- **Evidencia:** verificado live — cerrar con pedido EN_VIAJE → 409 `PEDIDOS_EN_VIAJE` "los pedidos PED-181060 siguen en viaje"; entregado → cierre 200. Tests `cerrarJornadaConPedidoEnViajeLanzaBusinessException` y `cerrarJornadaConTodosEntregadosCierra`.
+- **Criterios de aceptación:** ✅ cumplidos.
+- **Milestone:** C8 / Fase D
 
-### BUG-005 — No existe el concepto de "pedido express" (discrepancia de alcance)
+### BUG-005 — "Pedido express" (Opción A implementada) ✅ RESUELTO
 
-- **Tipo:** mejora / discrepancia de alcance
-- **Prioridad:** P1 (si es requisito de negocio de C8.1)
+- **Tipo:** mejora / decisión de alcance
+- **Prioridad:** P1
 - **Área:** pedidos
-- **Estado:** backlog
-- **Origen:** QA exploratorio (QA-07) — confirmado por grep global (0 coincidencias de "express")
-- **Descripción:** El escenario C8.1 refiere a "pedido express". No existe flag/campo ni flujo express en backend ni frontend. Solo existe la alerta "en ruta hoy".
-- **Comportamiento esperado:** definir si "express" es requisito; si lo es, exponer flag + filtro.
-- **Comportamiento actual:** no implementado.
-- **Bloquea milestone:** Depende de si es requisito de negocio; documentar antes de cerrar.
-- **Milestone:** C8
+- **Estado:** resuelto (2026-08-15) — Opción A
+- **Origen:** QA exploratorio (QA-07)
+- **Descripción:** el escenario C8.1 refería a "pedido express" pero no existía flag.
+- **Comportamiento actual:** ✅ Resuelto. Se eligió la **Opción A**: flag `express` (default false) en `Pedido` + migración `V16__pedido_express.sql` + ordenamiento prioritario de la cola de preparación/despacho (`express DESC, fecha_creacion ASC`) + badge "Express" en la UI y checkbox al crear pedido.
+- **Evidencia:** verificado live — crear pedido con `express:true` devuelve `express:true`; test `crearPedidoExpressPersisteFlag` y `listarColaPreparacionOrdenaExpressPrimeroYLuegoPorFecha`.
+- **Criterios de aceptación:** ✅ cumplidos.
+- **Milestone:** C8 / Fase D
 
 ---
 
 ## MEJORAS / TÉCNICA (P2 / P3)
 
-### QA-01 — Rutas inexistentes y métodos HTTP incorrectos devuelven 500 en vez de 404/405
+### QA-01 — Rutas inexistentes y métodos HTTP incorrectos devuelven 500 en vez de 404/405 ✅ RESUELTO
 
 - **Tipo:** bug · **Prioridad:** P2 · **Área:** error handling
-- **Repro:** `GET /api/nonexistent` → 500; `GET /api/stock/mermas` (POST-only) → 500. Verificado en este cierre.
-- **Esperado:** 404 (recurso) / 405 (método). **Actual:** 500 `INTERNAL_ERROR`.
-- **Causa:** `GlobalExceptionHandler` no maneja `NoResourceFoundException` ni `HttpRequestMethodNotSupportedException`.
-- **AC:** 404/405 con cuerpo JSON consistente.
-- **Origen:** QA-01 · **Milestone:** C8 · **Estado:** backlog
+- **Repro:** `GET /api/nonexistent` → 500; `GET /api/stock/mermas` (POST-only) → 500.
+- **Esperado:** 404 (recurso) / 405 (método). **Actual:** ✅ Resuelto — `GlobalExceptionHandler` mapea `NoResourceFoundException`→404, `HttpRequestMethodNotSupportedException`→405, `HttpMediaTypeNotSupportedException`→415.
+- **Evidencia:** verificado live (404 / 405) + tests `recursoInexistenteDevuelve404`, `metodoNoSoportadoDevuelve405`.
+- **Origen:** QA-01 · **Milestone:** C8 / Fase D · **Estado:** resuelto
 
 ### QA-04 — Validación anidada ausente en pedidos/entregas
 
@@ -88,13 +87,13 @@
 - **AC:** `@Valid` en listas anidadas; `EntregaRequest` validado.
 - **Origen:** QA-04 · **Milestone:** C8 · **Estado:** backlog
 
-### QA-05 — `POST /sustituciones` sin `@Valid` → 500 con body malformado
+### QA-05 — `POST /sustituciones` sin `@Valid` → 500 con body malformado ✅ RESUELTO
 
 - **Tipo:** bug · **Prioridad:** P2 · **Área:** validación
 - **Repro:** `POST /api/sustituciones {}` → 500.
-- **Esperado:** 400. **Actual:** 500 (NPE).
-- **AC:** 400 para body incompleto.
-- **Origen:** QA-05 · **Milestone:** C8 · **Estado:** backlog
+- **Esperado:** 400. **Actual:** ✅ Resuelto — `SustituirRequest` con `@NotNull`/`@Positive` y `@Valid` en el controller → 400 `VALIDATION_ERROR`.
+- **Evidencia:** verificado live (400) + test `sustitucionConBodyVacioDevuelve400`.
+- **Origen:** QA-05 · **Milestone:** C8 / Fase D · **Estado:** resuelto
 
 ### QA-08 — Alerta "en ruta hoy" no acotada a la jornada + truncamiento size=500
 

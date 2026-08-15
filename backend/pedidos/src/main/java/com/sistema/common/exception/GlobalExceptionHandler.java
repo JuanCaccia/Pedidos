@@ -5,9 +5,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -27,6 +30,26 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiError> handleNotFound(NotFoundException ex) {
 		ApiError error = ApiError.of(HttpStatus.NOT_FOUND.value(), "NOT_FOUND", ex.getMessage());
 		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+	}
+
+	@ExceptionHandler(NoResourceFoundException.class)
+	public ResponseEntity<ApiError> handleNoResource(NoResourceFoundException ex) {
+		ApiError error = ApiError.of(HttpStatus.NOT_FOUND.value(), "RESOURCE_NOT_FOUND", "Recurso no encontrado");
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+	}
+
+	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+	public ResponseEntity<ApiError> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+		ApiError error = ApiError.of(HttpStatus.METHOD_NOT_ALLOWED.value(), "METHOD_NOT_ALLOWED",
+				"Método no soportado: " + ex.getMethod());
+		return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(error);
+	}
+
+	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+	public ResponseEntity<ApiError> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
+		ApiError error = ApiError.of(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(), "UNSUPPORTED_MEDIA_TYPE",
+				"Tipo de contenido no soportado");
+		return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(error);
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

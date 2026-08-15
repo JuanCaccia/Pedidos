@@ -1,70 +1,71 @@
 # Roadmap — Sistema de Pedidos, Stock y Ventas
 
-> Priorización acordada (2026-08): **Fase A es la prioridad**. La Fase B se plantea
-> según el resultado final de la A. Las Fases C y D quedan **postergadas** y entrarán
-> en discusión recién al final de la hipotética Fase B.
+> Priorización acordada (2026-08): **Fase A completa** ✅ · **Fase B completa** ✅ ·
+> **Fase C completa** ✅ · **Fase D EN EJECUCIÓN** (cimientos técnicos, resiliencia y QA).
 
 ## Estado actual
 
-- **Backend** operativo (F0→F6): `usuario`, `cliente` (zonas), `stock` (items, lotes,
-  ledger `MovimientoStock`, mermas, ajustes, reservas atómicas), `pedido` (circuito de
-  8 estados, reserva parcial + backorder, pedido hijo por saldo), `ruta`, `reportes`,
-  seguridad JWT + BCrypt, auditoría `created_by`, OpenAPI/springdoc. **58 tests**.
-- **Frontend** (slice F1): login JWT, Dashboard, Pedidos (crear/confirmar/hijos),
-  Stock (reporte + movimientos), Clientes, Usuarios (solo `ADMINISTRATIVO`),
-  Items (ABMC completo). Next.js 16 + Tailwind v4.
-- Migraciones Flyway V1→V7 · App local en `:8080/api` + `:3000` (proxy `/api`).
+- **Backend** completo (F0→F6 + B1→B5): `usuario`, `cliente` (zonas), `stock`
+  (items, lotes, ledger, FEFO por lote, mermas, ajustes con umbral, reservas),
+  `pedido` (circuito con `PENDIENTE_STOCK`, pedido hijo), `ruta` (despacho +
+  asignación), `compra` (proveedores + OC con recepción → stock), `cobranza`
+  (remitos + cobranzas + cuenta de cliente), `reporte` (stock/ventas/rutas/caja),
+  `sustitucion`, `notificacion`, seguridad JWT + BCrypt, auditoría, springdoc. **142 tests**.
+- **Frontend** completo: login, Dashboard (alertas: stock bajo, pendientes,
+  re-agendados, lotes por vencer), Pedidos (cliente+zona, acciones por rol),
+  Stock (operativo), Clientes/Items/Usuarios/Proveedores (ABMC), Rutas +
+  Entregas, Órdenes de Compra, Cobranzas + Caja. Next.js 16 + Tailwind v4,
+  auditado con Impeccable.
+- Migraciones Flyway V1→V16 · Dockerfile backend/frontend + compose · CI en
+  GitHub Actions · App local en containers Podman (`:8080/api` + `:3000`).
 
 ---
 
-## Fase A — Cerrar el dominio (PRIORIDAD)
+## Fase A — Cerrar el dominio ✅ COMPLETA
 
-Objetivo: hacer el sistema **100 % operativo desde la UI**.
-
-| # | Item | Esfuerzo | Notas |
-|---|---|---|---|
-| A1 | **Rutas + Entregas (frontend)**: crear ruta, asignar pedidos, iniciar jornada, registrar entregas total/parcial (→ pedido hijo), cerrar jornada | medio | El mayor hueco operativo: la entrega existe en backend pero no es usable desde la UI |
-| A2 | **Stock operativo (frontend)**: Ingresos (con lote), Mermas, Ajustes — solo `ENCARGADO_DEPOSITO` | medio | El depósito no puede operar sin UI |
-| A3 | **Cambio de contraseña**: `PUT /usuarios/{id}/password` + pantalla | chico | Hoy el único camino es desactivar/recrear |
-| A4 | **Reactivar items**: `PATCH /items/{id}/reactivar` + botón | trivial | Baja reversible, igual que usuarios/clientes |
-| A5 | **Alertas operativas**: pedidos con `pendiente_stock`, stock bajo, lotes por vencer (dashboard + filtros) | medio | Convierte backorder y vencimientos en acciones |
-| A6 | **Refinamientos backend**: paginación en listados, `@Valid` declarativo, mensajes de error en español | medio | Deuda técnica acumulada |
-| A7 | **Calidad**: tests de integración MockMvc, primeros tests del frontend, CI en GitHub Actions (`mvn test` + `npm build` por push) | medio | La calidad no puede depender de la sesión |
-| A8 | **Operación**: Dockerfile del backend + compose completo, `JWT_SECRET` real, (opcional) deploy | medio | Listo para correr fuera de la máquina local |
-
-**Criterio de salida de la Fase A:** un vendedor crea/confirma pedidos; el depósito
-carga ingresos/mermas/ajustes; el administrativo planifica la ruta; el repartidor
-entrega (parcial incluido) y todo se refleja en stock + reportes — todo desde la UI.
+A1 Rutas+Entregas · A2 Stock operativo · A3 Cambio de contraseña · A4 Reactivar
+items · A5 Alertas · A6 Refinamientos (paginación/@Valid/ES) · A7 Calidad
+(integración + CI) · A8 Operación (Docker + JWT real).
 
 ---
 
-## Fase B — Modelo comercial (SE PLANTEA según el resultado final de la Fase A)
+## Fase B — Modelo comercial ✅ COMPLETA
 
-> No arrancar hasta que la Fase A esté cerrada y validada en operación real.
-> El alcance definitivo de B se define con los aprendizajes de A.
-
-Candidatos:
-
-1. **Cobranzas / Remitos / Facturación** — el circuito de entrega dice
-   *"se liquida la cobranza/remito por lo entregado"*, pero esa entidad no existe.
-   Pieza que falta para cerrar venta → cobro.
-2. **Proveedores + Órdenes de Compra** — hoy el ingreso es manual; modelar OC da
-   trazabilidad real de reposición.
-3. **Precios de lista** por item (y por zona/cliente) para sugerir en el pedido.
-4. **FIFO/FEFO por lote en egresos** — registrar qué lote se consume
-   (indispensable con vencimientos).
-5. **Resumen de caja** por jornada / vendedor / ruta.
+B1 Cobranzas + Remitos · B2 Proveedores + OC (+ alerta 3.4) · B3 Precios de
+lista · B4 FEFO/FIFO + cajón roto + umbral de ajustes · B5 Resumen de caja.
 
 ---
 
-## Fase C y D — Postergadas (en discusión al final de la hipotética Fase B)
+## Fase C — Usabilidad y experiencia a gran escala ✅ COMPLETA
 
-> No planificar ni estimar hasta entonces.
+Objetivo: operar con 10k items, 5k clientes, 30 camiones sin perder el control.
+Checkpoint de cierre: `e04061f`. C8 completo (pedido express + alerta en ruta, faltante +
+notificaciones, sustitución, TTL reservas, consolidación, export CSV). 2 bloqueantes
+resueltos (autorización por rol, sustitución con diferencia negativa).
 
-- **C — Experiencia y producto**: dashboard analítico con gráficos, app/PWA del
-  repartidor (o mobile-first), notificaciones (email/WhatsApp), exportación
-  CSV/PDF, multi-depósito / multi-empresa, integraciones externas (AFIP,
-  pasarelas de pago).
-- **D — Cimientos técnicos**: CI/CD completo, monitoreo (actuator/métricas),
-  API versioning, tests e2e (Playwright), índices/consultas de reportes
-  optimizadas.
+| # | Item | Notas |
+|---|---|---|
+| C1 | **Backend: paginar + búsqueda server-side (`?q=`)** en `/items`, `/clientes`, `/usuarios`, `/proveedores`, `/movimientos` | PREREQUISITO de todo lo demás: sin esto el autocomplete no puede existir |
+| C2 | **Categorías en Item** + selector agrupado/buscable | Distinguir "Harina 000" de "Harina 000 Premium" |
+| C3 | **Combobox autocomplete** (search-as-you-type con debounce) en clientes/items/repartidor | Prohibir `<select>` planos para entidades principales |
+| C4 | **Tabs con contadores por estado** en Pedidos (exception-based UI) + vistas guardadas | `[140] En preparación` · `[12] Sin stock` · `[5] Re-agendados` |
+| C5 | **Drawer lateral** (contexto visible) + **despacho en lote** + **confirmación frictionada** | "Escriba CANCELAR" para acciones masivas |
+| C6 | **Capacidad en rutas** + matriz de asignación con batch actions | Split-screen zonas ↔ camiones con indicador de capacidad |
+| C7 | **PWA del repartidor one-thumb** | Modo turno, swipe para entregar, "entregar todo menos N" |
+| C8 | **Escenarios operativos**: pedido express + alerta en ruta · merma desde preparación + notificación admin · sustitución en destino/cierre de camión · TTL de reservas (48hs) · consolidación de hijos · exportación CSV/PDF | Surgen de la revisión de escenarios pre-B |
+
+---
+
+## Fase D — Cimientos técnicos, resiliencia y QA (EN EJECUCIÓN)
+
+CI/CD completo, monitoreo (actuator/métricas), API versioning, tests e2e
+(Playwright), índices/consultas de reportes optimizadas, multi-depósito /
+multi-empresa, integraciones externas (AFIP, pasarelas de pago).
+
+### D1 — Resiliencia y errores ✅ COMPLETA
+- BUG-004: cerrar jornada se bloquea si hay pedidos `EN_VIAJE` (409 + números listados).
+- QA-01/QA-05: `GlobalExceptionHandler` mapea 404/405/415; `SustituirRequest` validado (`@NotNull`/`@Positive` + `@Valid`).
+
+### D2 — Pedido Express ✅ COMPLETA
+- Flag `express` (default false) en Pedido (V16), prioridad en cola de preparación/despacho
+  (`express DESC, fecha_creacion ASC`), badge Express en UI y checkbox al crear.

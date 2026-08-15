@@ -99,7 +99,7 @@ class PedidoServiceTest {
 	}
 
 	private Pedido crearPedido(Long itemId, BigDecimal cantidad) {
-		return pedidoService.crearPedido(new CrearPedidoCommand(1L, 1L, null, null,
+		return pedidoService.crearPedido(new CrearPedidoCommand(1L, 1L, null, null, false,
 				List.of(new LineaPedidoCommand(itemId, cantidad, new BigDecimal("5.00")))));
 	}
 
@@ -137,6 +137,32 @@ class PedidoServiceTest {
 		assertNotNull(pedido.getNumero());
 		assertEquals(1, pedido.getItems().size());
 		assertEquals(0, new BigDecimal("50.00").compareTo(pedido.getTotal()));
+	}
+
+	@Test
+	void crearPedidoExpressPersisteFlag() {
+		Pedido pedido = pedidoService.crearPedido(new CrearPedidoCommand(1L, 1L, null, null, true,
+				List.of(new LineaPedidoCommand(10L, new BigDecimal("1"), new BigDecimal("5.00")))));
+
+		assertTrue(pedido.isExpress());
+	}
+
+	@Test
+	void listarColaPreparacionOrdenaExpressPrimeroYLuegoPorFecha() {
+		Pedido normal = crearPedido(10L, new BigDecimal("1.000"));
+		normal.setEstado(EstadoPedido.PENDIENTE_PREPARACION);
+		pedidoRepository.save(normal);
+
+		Pedido express = pedidoService.crearPedido(new CrearPedidoCommand(1L, 1L, null, null, true,
+				List.of(new LineaPedidoCommand(11L, new BigDecimal("1"), new BigDecimal("5.00")))));
+		express.setEstado(EstadoPedido.PENDIENTE_PREPARACION);
+		pedidoRepository.save(express);
+
+		com.sistema.common.model.PageResponse<Pedido> cola = pedidoService.listarPaginado(EstadoPedido.PENDIENTE_PREPARACION, null, null, 0, 20);
+
+		assertEquals(2, cola.content().size());
+		assertTrue(cola.content().get(0).isExpress(), "El express debe aparecer primero en la cola de preparación");
+		assertTrue(cola.content().get(1).isExpress() == false, "El pedido normal debe quedar después del express");
 	}
 
 	@Test

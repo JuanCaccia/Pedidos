@@ -1,15 +1,15 @@
 # Project Status — Sistema de Pedidos, Stock y Ventas
 
-> **Fecha:** 2026-08-15. **Autor:** cierre formal de milestone (audit + QA + handoff).
+> **Fecha:** 2026-08-15. **Autor:** cierre formal de milestone + Fase D (D1 resiliencia, D2 express).
 > Este documento describe el estado **verificado real** del proyecto, no aspiraciones.
 
 ## Current Milestone
 
-**Fase C — Usabilidad y experiencia a gran escala (C1…C8)**
+**Fase D — Cimientos técnicos, resiliencia y QA (D1, D2 completas)**
 
 ## Status
 
-**PARTIAL — C8 con 2 P1 resueltos y verificados; resta BUG-004/BUG-005 y decisiones de entrega**
+**FUNCIONAL — Fase C cerrada; Fase D D1 (resiliencia) y D2 (express) completas; 142 tests verdes**
 
 ## Milestone Objective
 

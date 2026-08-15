@@ -122,6 +122,34 @@ class RutaServiceTest {
 		assertThrows(BusinessException.class, () -> rutaService.cerrarJornada(ruta.getId()));
 
 		rutaService.iniciarJornada(ruta.getId());
+		pedidoGateway.enViaje.put(100L, false);
+		Ruta cerrada = rutaService.cerrarJornada(ruta.getId());
+		assertEquals(EstadoRuta.FINALIZADA, cerrada.getEstado());
+	}
+
+	@Test
+	void cerrarJornadaConPedidoEnViajeLanzaBusinessException() {
+		pedidoGateway.disponible.put(100L, true);
+		pedidoGateway.zonaDeCliente.put(100L, 1L);
+		Ruta ruta = rutaService.crearRuta(comandoConPedidos(100L));
+		rutaService.iniciarJornada(ruta.getId());
+		pedidoGateway.enViaje.put(100L, true);
+
+		BusinessException ex = assertThrows(BusinessException.class, () -> rutaService.cerrarJornada(ruta.getId()));
+		assertTrue(ex.getMessage().contains("PED-100"), "El mensaje debe listar el número del pedido en viaje");
+	}
+
+	@Test
+	void cerrarJornadaConTodosEntregadosCierra() {
+		pedidoGateway.disponible.put(100L, true);
+		pedidoGateway.zonaDeCliente.put(100L, 1L);
+		pedidoGateway.disponible.put(200L, true);
+		pedidoGateway.zonaDeCliente.put(200L, 1L);
+		Ruta ruta = rutaService.crearRuta(comandoConPedidos(100L, 200L));
+		rutaService.iniciarJornada(ruta.getId());
+		pedidoGateway.enViaje.put(100L, false);
+		pedidoGateway.enViaje.put(200L, false);
+
 		Ruta cerrada = rutaService.cerrarJornada(ruta.getId());
 		assertEquals(EstadoRuta.FINALIZADA, cerrada.getEstado());
 	}
@@ -215,6 +243,7 @@ class RutaServiceTest {
 		private final Map<Long, Boolean> disponible = new HashMap<>();
 		private final Map<Long, Long> zonaDeCliente = new HashMap<>();
 		private final Map<Long, BigDecimal> unidades = new HashMap<>();
+		private final Map<Long, Boolean> enViaje = new HashMap<>();
 		private final List<String> llamadas = new ArrayList<>();
 
 		@Override
@@ -251,6 +280,11 @@ class RutaServiceTest {
 		@Override
 		public void iniciarViaje(Long pedidoId) {
 			llamadas.add("VIAJE:" + pedidoId);
+		}
+
+		@Override
+		public boolean estaEnViaje(Long pedidoId) {
+			return enViaje.getOrDefault(pedidoId, false);
 		}
 	}
 }

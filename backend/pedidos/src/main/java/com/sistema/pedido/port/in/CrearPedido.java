@@ -12,7 +12,7 @@ public interface CrearPedido {
 	}
 
 	record CrearPedidoCommand(Long clienteId, Long vendedorId, LocalDate fechaJornada, String observaciones,
-			List<LineaPedidoCommand> items) {
+			boolean express, List<LineaPedidoCommand> items) {
 	}
 
 	Pedido crearPedido(CrearPedidoCommand command);

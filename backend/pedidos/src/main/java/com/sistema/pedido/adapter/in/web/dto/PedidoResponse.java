@@ -9,12 +9,13 @@ import java.util.List;
 
 public record PedidoResponse(Long id, String numero, Long clienteId, Long vendedorId, Long pedidoPadreId, String estado,
 		LocalDateTime fechaCreacion, LocalDateTime updatedAt, LocalDate fechaJornada, String observaciones, BigDecimal total,
-		List<PedidoItemResponse> items) {
+		boolean express, List<PedidoItemResponse> items) {
 
 	public static PedidoResponse from(Pedido pedido) {
 		List<PedidoItemResponse> items = pedido.getItems().stream().map(PedidoItemResponse::from).toList();
 		return new PedidoResponse(pedido.getId(), pedido.getNumero(), pedido.getClienteId(), pedido.getVendedorId(),
 				pedido.getPedidoPadreId(), pedido.getEstado().name(), pedido.getFechaCreacion(),
-				pedido.getUpdatedAt(), pedido.getFechaJornada(), pedido.getObservaciones(), pedido.getTotal(), items);
+				pedido.getUpdatedAt(), pedido.getFechaJornada(), pedido.getObservaciones(), pedido.getTotal(),
+				pedido.isExpress(), items);
 	}
 }

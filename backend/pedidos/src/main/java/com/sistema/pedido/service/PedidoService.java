@@ -76,7 +76,7 @@ public class PedidoService implements CrearPedido, ConfirmarPedido, GestionarEnt
 			throw new BusinessException("VALIDATION_ERROR", "Un pedido debe tener al menos una línea");
 		}
 		Pedido pedido = new Pedido(command.clienteId(), command.vendedorId(), command.fechaJornada(),
-				command.observaciones(), new ArrayList<>());
+				command.observaciones(), command.express(), new ArrayList<>());
 		pedido.setFechaCreacion(LocalDateTime.now());
 		for (LineaPedidoCommand linea : command.items()) {
 			if (linea.cantidad() == null || linea.cantidad().signum() <= 0) {
@@ -173,7 +173,7 @@ public class PedidoService implements CrearPedido, ConfirmarPedido, GestionarEnt
 
 	private void generarPedidoHijo(Pedido padre) {
 		Pedido hijo = new Pedido(padre.getClienteId(), padre.getVendedorId(), null,
-				"Saldo pendiente del pedido " + padre.getNumero(), new ArrayList<>());
+				"Saldo pendiente del pedido " + padre.getNumero(), padre.isExpress(), new ArrayList<>());
 		hijo.setPedidoPadreId(padre.getId());
 		hijo.setFechaCreacion(LocalDateTime.now());
 		for (PedidoItem item : padre.getItems()) {
@@ -346,7 +346,7 @@ public class PedidoService implements CrearPedido, ConfirmarPedido, GestionarEnt
 			origen.add(pedido);
 		}
 		Pedido consolidado = new Pedido(clienteId, command.vendedorId(), null,
-				"Consolidación de " + origen.size() + " pedidos", new ArrayList<>());
+				"Consolidación de " + origen.size() + " pedidos", origen.stream().anyMatch(Pedido::isExpress), new ArrayList<>());
 		consolidado.setFechaCreacion(LocalDateTime.now());
 		lineasPorItem.values().forEach(consolidado::agregarItem);
 		consolidado.setNumero("PED-" + String.format("%06d", System.nanoTime() % 1000000));
@@ -408,6 +408,15 @@ public class PedidoService implements CrearPedido, ConfirmarPedido, GestionarEnt
 			todos = pedidoRepository.findByVendedorId(vendedorId);
 		} else {
 			todos = pedidoRepository.findAll();
+		}
+		// Cola de preparación/despacho: los express primero (más recientes primero dentro del mismo grupo).
+		if (estado != null && (estado == EstadoPedido.PENDIENTE_STOCK
+				|| estado == EstadoPedido.PENDIENTE_PREPARACION || estado == EstadoPedido.PENDIENTE_ENTREGA)) {
+			todos = todos.stream()
+					.sorted(java.util.Comparator
+							.comparing(Pedido::isExpress).reversed()
+							.thenComparing(java.util.Comparator.nullsLast(java.util.Comparator.comparing(Pedido::getFechaCreacion))))
+					.toList();
 		}
 		return paginar(todos, page, size);
 	}

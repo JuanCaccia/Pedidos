@@ -20,16 +20,19 @@ public class Pedido {
 	private LocalDate fechaJornada;
 	private String observaciones;
 	private BigDecimal total = BigDecimal.ZERO;
+	private boolean express = false;
 	private List<PedidoItem> items = new ArrayList<>();
 
 	public Pedido() {
 	}
 
-	public Pedido(Long clienteId, Long vendedorId, LocalDate fechaJornada, String observaciones, List<PedidoItem> items) {
+	public Pedido(Long clienteId, Long vendedorId, LocalDate fechaJornada, String observaciones, boolean express,
+			List<PedidoItem> items) {
 		this.clienteId = clienteId;
 		this.vendedorId = vendedorId;
 		this.fechaJornada = fechaJornada;
 		this.observaciones = observaciones;
+		this.express = express;
 		this.items = items;
 	}
 
@@ -134,6 +137,14 @@ public class Pedido {
 
 	public void setTotal(BigDecimal total) {
 		this.total = total;
+	}
+
+	public boolean isExpress() {
+		return express;
+	}
+
+	public void setExpress(boolean express) {
+		this.express = express;
 	}
 
 	public List<PedidoItem> getItems() {

@@ -50,6 +50,9 @@ public class PedidoJpaEntity extends BaseEntity {
 	@Column(nullable = false, precision = 12, scale = 2)
 	private BigDecimal total;
 
+	@Column(nullable = false)
+	private boolean express;
+
 	@OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
 	@JoinColumn(name = "pedido_id", nullable = false)
 	private List<PedidoItemJpaEntity> items = new ArrayList<>();
@@ -59,7 +62,7 @@ public class PedidoJpaEntity extends BaseEntity {
 	}
 
 	public PedidoJpaEntity(String numero, Long clienteId, Long vendedorId, Long pedidoPadreId, EstadoPedido estado,
-			LocalDateTime fechaCreacion, LocalDate fechaJornada, String observaciones, BigDecimal total) {
+			LocalDateTime fechaCreacion, LocalDate fechaJornada, String observaciones, BigDecimal total, boolean express) {
 		this.numero = numero;
 		this.clienteId = clienteId;
 		this.vendedorId = vendedorId;
@@ -69,6 +72,7 @@ public class PedidoJpaEntity extends BaseEntity {
 		this.fechaJornada = fechaJornada;
 		this.observaciones = observaciones;
 		this.total = total;
+		this.express = express;
 	}
 
 	public String getNumero() {
@@ -141,6 +145,14 @@ public class PedidoJpaEntity extends BaseEntity {
 
 	public void setTotal(BigDecimal total) {
 		this.total = total;
+	}
+
+	public boolean isExpress() {
+		return express;
+	}
+
+	public void setExpress(boolean express) {
+		this.express = express;
 	}
 
 	public List<PedidoItemJpaEntity> getItems() {

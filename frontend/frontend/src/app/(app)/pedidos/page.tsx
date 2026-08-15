@@ -589,7 +589,16 @@ function PedidoRow({
           />
         </td>
       )}
-      <td className="px-4 py-3 font-medium text-neutral-900 dark:text-neutral-100">{pedido.numero}</td>
+      <td className="px-4 py-3 font-medium text-neutral-900 dark:text-neutral-100">
+        <span className="flex items-center gap-2">
+          {pedido.numero}
+          {pedido.express && (
+            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              Express
+            </span>
+          )}
+        </span>
+      </td>
       <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
         {cliente?.razonSocial ?? `#${pedido.clienteId}`}
       </td>
@@ -1086,6 +1095,7 @@ function NuevoPedidoForm({
   const [clienteId, setClienteId] = useState<number | null>(null);
   const [fechaJornada, setFechaJornada] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [express, setExpress] = useState(false);
   const [categoria, setCategoria] = useState("");
   const [categorias, setCategorias] = useState<string[]>([]);
   const [items, setItems] = useState<Item[]>([]);
@@ -1143,6 +1153,7 @@ function NuevoPedidoForm({
         vendedorId,
         fechaJornada: fechaJornada || undefined,
         observaciones: observaciones.trim() || undefined,
+        express,
         items: lineasValidas.map((l) => ({
           itemId: l.itemId as number,
           cantidad: Number(l.cantidad),
@@ -1204,6 +1215,16 @@ function NuevoPedidoForm({
             className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
           />
         </div>
+
+        <label className="flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
+          <input
+            type="checkbox"
+            checked={express}
+            onChange={(e) => setExpress(e.target.checked)}
+            className="h-4 w-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500 dark:border-neutral-700 dark:bg-neutral-800"
+          />
+          Pedido express (prioridad en preparación y despacho)
+        </label>
 
         <div>
           <div className="mb-2 flex items-center justify-between">

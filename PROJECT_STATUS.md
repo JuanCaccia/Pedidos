@@ -162,7 +162,7 @@ Future:
 Commit:
 - **e04061f** `checkpoint: close milestone Fase C (C1-C8)` — pusheado a `origin/main`
 - frontend integrado al repo padre como carpeta normal (53 archivos; gitlink eliminado)
-- **Fase D (D1-D4):** commits `048222b`, `47e71a4`, `8ad9b93`, `638e447` + checkpoint de cierre (ver abajo)
+- **Fase D (D1-D4):** commits `048222b`, `47e71a4`, `8ad9b93`, `638e447` + **`2b3ff41` `checkpoint: close milestone Fase D (D1-D4)`** — pusheado a `origin/main`
 - working tree limpio (verificado en auditoría de cierre)
 
 ## Next Milestone

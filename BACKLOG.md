@@ -175,6 +175,29 @@
 - **AC:** eliminar registros de prueba QA.
 - **Milestone:** C8 · **Estado:** abierto
 
+### STR-004 — Sin ordenamiento determinista en la cola de confirmación del backend
+
+- **Tipo:** deuda técnica / mejora de backend · **Prioridad:** P2
+- **Área:** pedidos / listado
+- **Descripción:** `PedidoService.listarPaginado` ordena solo `PENDIENTE_STOCK`/`PENDIENTE_PREPARACION`/`PENDIENTE_ENTREGA` (express DESC, fecha ASC). `PENDIENTE_CONFIRMACION` se pagina en orden natural (id asc) → los pedidos nuevos quedan en la última página y la UI (tab "Conf.") no es determinista. Detectado al escribir el E2E de consolidación (que debió localizar paginando o usar fallback por API).
+- **AC:** ordenar también la cola de confirmación (p. ej. más recientes primero) o definir un orden estable; revisar impactos en UI/QA.
+- **Origen:** QA E2E consolidación · **Milestone:** Fase D · **Estado:** backlog
+
+### STR-005 — Sin endpoints de limpieza/reset de datos para tests E2E
+
+- **Tipo:** deuda técnica · **Prioridad:** P2
+- **Área:** tests / backend
+- **Descripción:** los specs E2E siembran pedidos/rutas/cobranzas por API y no hay endpoint de delete/reset. La BD crece entre corridas, lo que obliga a los tests a ser tolerantes a estado acumulado (localización paginada, fallback por API) y vuelve flaky cualquier test que asuma un conjunto fijo de datos.
+- **AC:** (a) agregar endpoint/semilla de reset para entornos de test, o (b) correr E2E contra una BD reseteada por corrida; documentar la estrategia elegida.
+- **Origen:** QA E2E · **Milestone:** Fase D · **Estado:** backlog
+
+### STR-006 — Advertencia HV000271 (deprecación de `@Valid` sobre contenedores `List`)
+
+- **Tipo:** deuda técnica menor · **Prioridad:** P3
+- **Área:** validación
+- **Descripción:** Hibernate Validator emite HV000271 al usar `@Valid` directamente sobre `List<...>` en `CrearPedidoRequest`/`EntregaRequest`. No afecta funcionalidad ni tests, pero conviene migrar a `@Valid` en el tipo parametrizado (p. ej. `List<@Valid LineaRequest>`) en un futuro.
+- **Origen:** auditoría de cierre Fase D · **Milestone:** Fase D · **Estado:** backlog
+
 ---
 
 ## LIMITACIONES CONOCIDAS (no bugs)

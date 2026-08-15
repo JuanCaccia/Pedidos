@@ -1,15 +1,15 @@
 # Project Status — Sistema de Pedidos, Stock y Ventas
 
-> **Fecha:** 2026-08-15. **Autor:** cierre formal de milestone + Fase D (D1 resiliencia, D2 express).
+> **Fecha:** 2026-08-15. **Autor:** cierre formal de milestone + cierre de Fase D (D1-D4).
 > Este documento describe el estado **verificado real** del proyecto, no aspiraciones.
 
 ## Current Milestone
 
-**Fase D — Cimientos técnicos, resiliencia y QA (D1, D2, D3 completas)**
+**Fase D — Cimientos técnicos, resiliencia y QA (D1, D2, D3, D4) — COMPLETA y VERIFICADA**
 
 ## Status
 
-**FUNCIONAL — Fase C cerrada; Fase D D1 (resiliencia), D2 (express) y D3 (integridad + observabilidad) completas; 148 tests verdes**
+**COMPLETA / VERIFICADA — Backend 148 tests + E2E Playwright 7 tests en verde; Fase D cerrada formalmente.**
 
 ## Milestone Objective
 
@@ -162,7 +162,8 @@ Future:
 Commit:
 - **e04061f** `checkpoint: close milestone Fase C (C1-C8)` — pusheado a `origin/main`
 - frontend integrado al repo padre como carpeta normal (53 archivos; gitlink eliminado)
-- working tree limpio salvo `ROADMAP.md` (STR-002, pendiente de actualizar)
+- **Fase D (D1-D4):** commits `048222b`, `47e71a4`, `8ad9b93`, `638e447` + checkpoint de cierre (ver abajo)
+- working tree limpio (verificado en auditoría de cierre)
 
 ## Next Milestone
 
@@ -171,10 +172,11 @@ optimización de reportes, multi-depósito/empresa, integraciones externas (AFIP
 
 ## Recommended Next Action
 
-1. Ampliar cobertura E2E Playwright (turno/repartidor, consolidación, sustitución).
-2. Monitoreo avanzado: exponer `/actuator/metrics` y métricas de negocio.
-3. API versioning + más ítems de Fase D del ROADMAP.
-4. Limpiar datos de QA en BD local (STR-003).
+1. Refinamiento UX/UI o hardening de producción/Docker/CI-CD (ver opciones del handoff de cierre).
+2. Ordenar la cola de confirmación del backend (STR-004) — mejora de determinismo.
+3. Monitoreo avanzado: exponer `/actuator/metrics` y métricas de negocio.
+4. Endpoints de limpieza/reset para tests E2E (STR-005).
+5. Limpiar datos de QA en BD local (STR-003).
 
 ## Notes for Future Agents
 

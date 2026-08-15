@@ -75,3 +75,8 @@ multi-empresa, integraciones externas (AFIP, pasarelas de pago).
 - QA-04: validación en cascada `@Valid` en `CrearPedidoRequest.items` y `EntregaRequest.entregas`; `cantidadEntregada` `@Positive`.
 - QA-13: sustitución valida que `itemOriginalId` pertenezca al pedido (`ITEM_NO_PERTENECE_AL_PEDIDO`) antes de tocar stock.
 - Actuator: `spring-boot-starter-actuator`; `/actuator/health` (y probes liveness/readiness) público, `/actuator/info` y resto `/actuator/**` solo `ADMINISTRATIVO`; `show-details: when-authorized`; metadata `info.app`.
+
+### D4 — Tests E2E (Playwright) ✅ COMPLETA
+- `@playwright/test` + chromium en el frontend; `playwright.config.ts` (baseURL :3000, reuseExistingServer).
+- 4 tests E2E: login válido, login inválido, navegación del repartidor, crear pedido express.
+- Script `npm run test:e2e` + job `e2e` en CI (postgres + backend + frontend + playwright).

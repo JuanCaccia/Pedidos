@@ -59,3 +59,72 @@ jobs:
         run: npm ci
       - name: Build frontend
         run: npm run build
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: pedidos
+          POSTGRES_USER: pedidos
+          POSTGRES_PASSWORD: pedidos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pedidos -d pedidos"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: pedidos
+      DB_USER: pedidos
+      DB_PASSWORD: pedidos
+      JWT_SECRET: test-secret-e2e-para-ci-no-usar-en-produccion
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Iniciar backend
+        working-directory: backend/pedidos
+        run: |
+          nohup ./mvnw -q spring-boot:run > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8080/api/health >/dev/null 2>&1 && break
+            sleep 2
+          done
+          curl -sf http://localhost:8080/api/health || { echo "Backend no levanto"; cat /tmp/backend.log; exit 1; }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/frontend/package-lock.json
+
+      - name: Instalar frontend y Playwright
+        working-directory: frontend/frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Iniciar frontend
+        working-directory: frontend/frontend
+        run: |
+          nohup npm run start > /tmp/frontend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3000/login >/dev/null 2>&1 && break
+            sleep 2
+          done
+          curl -sf http://localhost:3000/login || { echo "Frontend no levanto"; cat /tmp/frontend.log; exit 1; }
+
+      - name: Correr tests E2E
+        working-directory: frontend/frontend
+        run: npm run test:e2e

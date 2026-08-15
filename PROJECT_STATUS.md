@@ -79,7 +79,7 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 
 * Sin soporte offline.
 * Sin monitoreo/actuator de producción (Fase D). — ✅ D3: actuator base (health/info) implementado; faltan métricas avanzadas/actuator/metrics.
-* Sin tests e2e (Playwright) (Fase D).
+* Sin tests e2e (Playwright) (Fase D). — ✅ D4: Playwright E2E implementado (4 tests: login ok/error, repartidor nav, crear pedido express) + job CI.
 * Sin tests del frontend (ningún test unit/e2e FE).
 * JWT_SECRET con default inseguro en dev.
 * Consultas de reportes sin optimizar para gran volumen (Fase D).
@@ -136,7 +136,7 @@ result: 2 bloqueantes (BUG-002, BUG-003) RESUELTOS y verificados + 13 hallazgos 
 
 Automated tests:
 - Backend: **148 tests, 0 fallos** (surefire).
-- Frontend: **sin tests**.
+- Frontend: **sin tests unitarios; E2E con Playwright: 4 tests verdes** (`npm run test:e2e`).
 
 End-to-end verification:
 - Core flows vía API confirmados (login, pedido, consolidación, OC, cobranza, faltante,
@@ -166,14 +166,14 @@ Commit:
 
 ## Next Milestone
 
-Fase D (cimientos técnicos: CI/CD completo, monitoreo, API versioning, e2e Playwright,
-optimización de reportes, multi-depósito/empresa) — tras resolver bloqueantes de C8.
+Continuación de Fase D: monitoreo avanzado (actuator/metrics), API versioning, más cobertura E2E,
+optimización de reportes, multi-depósito/empresa, integraciones externas (AFIP, pasarelas).
 
 ## Recommended Next Action
 
-1. Resolver BUG-004 (validar cierre de jornada sin EN_VIAJE colgados).
-2. Definir alcance de "pedido express" (BUG-005).
-3. Actualizar ROADMAP.md (STR-002): conteos 148 tests, migraciones V1→V16, estado Fase D.
+1. Ampliar cobertura E2E Playwright (turno/repartidor, consolidación, sustitución).
+2. Monitoreo avanzado: exponer `/actuator/metrics` y métricas de negocio.
+3. API versioning + más ítems de Fase D del ROADMAP.
 4. Limpiar datos de QA en BD local (STR-003).
 
 ## Notes for Future Agents

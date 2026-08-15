@@ -78,5 +78,7 @@ multi-empresa, integraciones externas (AFIP, pasarelas de pago).
 
 ### D4 — Tests E2E (Playwright) ✅ COMPLETA
 - `@playwright/test` + chromium en el frontend; `playwright.config.ts` (baseURL :3000, reuseExistingServer).
-- 4 tests E2E: login válido, login inválido, navegación del repartidor, crear pedido express.
+- 7 tests E2E: login válido, login inválido, navegación repartidor, crear pedido express,
+  flujo repartidor/turno (ENTREGADO), consolidación de pedidos, sustitución en destino (+cobranza).
 - Script `npm run test:e2e` + job `e2e` en CI (postgres + backend + frontend + playwright).
+- Suite estable como gate de CI (verificado 7/7 ×2).

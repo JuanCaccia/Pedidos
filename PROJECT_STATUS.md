@@ -79,7 +79,7 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 
 * Sin soporte offline.
 * Sin monitoreo/actuator de producción (Fase D). — ✅ D3: actuator base (health/info) implementado; faltan métricas avanzadas/actuator/metrics.
-* Sin tests e2e (Playwright) (Fase D). — ✅ D4: Playwright E2E implementado (4 tests: login ok/error, repartidor nav, crear pedido express) + job CI.
+* Sin tests e2e (Playwright) (Fase D). — ✅ D4: Playwright E2E implementado (7 tests: login, repartidor/turno, consolidación, sustitución, pedido express) + job CI.
 * Sin tests del frontend (ningún test unit/e2e FE).
 * JWT_SECRET con default inseguro en dev.
 * Consultas de reportes sin optimizar para gran volumen (Fase D).
@@ -136,7 +136,7 @@ result: 2 bloqueantes (BUG-002, BUG-003) RESUELTOS y verificados + 13 hallazgos 
 
 Automated tests:
 - Backend: **148 tests, 0 fallos** (surefire).
-- Frontend: **sin tests unitarios; E2E con Playwright: 4 tests verdes** (`npm run test:e2e`).
+- Frontend: **sin tests unitarios; E2E con Playwright: 7 tests verdes, estable como gate de CI** (`npm run test:e2e`).
 
 End-to-end verification:
 - Core flows vía API confirmados (login, pedido, consolidación, OC, cobranza, faltante,

@@ -17,6 +17,10 @@ interface ComboboxProps {
   label?: string;
   required?: boolean;
   disabled?: boolean;
+  /** Label ya resuelto para el valor seleccionado. Si se provee y hay un `value`,
+   *  se muestra directamente sin depender de `search`. Útil cuando el item
+   *  seleccionado puede quedar fuera del filtro actual (p. ej. categoría). */
+  valueLabel?: string | null;
 }
 
 const INPUT_CLASS =
@@ -32,6 +36,7 @@ export default function Combobox({
   label,
   required = false,
   disabled = false,
+  valueLabel = null,
 }: ComboboxProps) {
   const inputId = useId();
   const listboxId = useId();
@@ -164,6 +169,10 @@ export default function Combobox({
 
   useEffect(() => {
     if (value == null) return;
+    if (valueLabel) {
+      setText(valueLabel);
+      return;
+    }
     let cancelled = false;
     const seq = ++seqRef.current;
     search("")
@@ -179,7 +188,7 @@ export default function Combobox({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [value, valueLabel]);
 
   useEffect(() => {
     if (!open || activeIndex < 0) return;

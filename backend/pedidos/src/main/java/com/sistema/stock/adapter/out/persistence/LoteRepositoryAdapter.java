@@ -41,4 +41,9 @@ public class LoteRepositoryAdapter implements LoteRepository {
 				.map(mapper::toDomain)
 				.toList();
 	}
+
+	@Override
+	public List<Lote> findAll() {
+		return jpaRepository.findAll().stream().map(mapper::toDomain).toList();
+	}
 }

@@ -253,6 +253,16 @@ class ReporteServiceTest {
 		public List<com.sistema.stock.model.Lote> listarLotesPorVencer(int dias) {
 			return List.of();
 		}
+
+		@Override
+		public List<com.sistema.stock.model.Lote> listarTodosLosLotes() {
+			return List.of();
+		}
+
+		@Override
+		public BigDecimal obtenerDisponibleDeLote(Long itemId, Long loteId) {
+			return BigDecimal.ZERO;
+		}
 	}
 
 	private static class FakePedido implements ConsultarPedido {

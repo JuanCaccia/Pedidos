@@ -34,4 +34,8 @@ public interface ConsultarStock {
 	List<Lote> listarLotes(Long itemId);
 
 	List<Lote> listarLotesPorVencer(int dias);
+
+	List<Lote> listarTodosLosLotes();
+
+	BigDecimal obtenerDisponibleDeLote(Long itemId, Long loteId);
 }

@@ -44,6 +44,7 @@ const TABS: TabDef[] = [
 interface FormItemRow {
   key: number;
   itemId: number | null;
+  itemLabel: string | null;
   cantidad: string;
   precioUnitario: string;
 }
@@ -1099,7 +1100,7 @@ function NuevoPedidoForm({
   const [categoria, setCategoria] = useState("");
   const [categorias, setCategorias] = useState<string[]>([]);
   const [items, setItems] = useState<Item[]>([]);
-  const [lineas, setLineas] = useState<FormItemRow[]>([{ key: Date.now(), itemId: null, cantidad: "", precioUnitario: "" }]);
+  const [lineas, setLineas] = useState<FormItemRow[]>([{ key: Date.now(), itemId: null, itemLabel: null, cantidad: "", precioUnitario: "" }]);
 
   useEffect(() => {
     apiGet<string[]>("/api/items/categorias")
@@ -1120,7 +1121,7 @@ function NuevoPedidoForm({
   }, [categoria]);
 
   function addLinea() {
-    setLineas((prev) => [...prev, { key: Date.now() + Math.random(), itemId: null, cantidad: "", precioUnitario: "" }]);
+    setLineas((prev) => [...prev, { key: Date.now() + Math.random(), itemId: null, itemLabel: null, cantidad: "", precioUnitario: "" }]);
   }
 
   function updateLinea<K extends keyof FormItemRow>(key: number, field: K, value: FormItemRow[K]) {
@@ -1249,7 +1250,6 @@ function NuevoPedidoForm({
               value={categoria}
               onChange={(e) => {
                 setCategoria(e.target.value);
-                setLineas((prev) => prev.map((l) => ({ ...l, itemId: null })));
               }}
               className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
             >
@@ -1265,14 +1265,22 @@ function NuevoPedidoForm({
             {lineas.map((linea) => (
               <div key={linea.key} className="grid grid-cols-[1fr_5rem_6rem_auto] gap-2">
                 <Combobox
-                  key={`${linea.key}-${categoria}`}
+                  key={linea.key}
                   placeholder="Buscar item..."
                   value={linea.itemId}
+                  valueLabel={linea.itemLabel}
                   onChange={(id) => {
                     updateLinea(linea.key, "itemId", id);
                     if (id != null) {
                       const item = items.find((i) => i.id === id);
-                      if (item) updateLinea(linea.key, "precioUnitario", String(item.precioLista ?? 0));
+                      if (item) {
+                        updateLinea(linea.key, "itemLabel", `${item.sku} — ${item.nombre}`);
+                        updateLinea(linea.key, "precioUnitario", String(item.precioLista ?? 0));
+                      } else {
+                        updateLinea(linea.key, "itemLabel", null);
+                      }
+                    } else {
+                      updateLinea(linea.key, "itemLabel", null);
                     }
                   }}
                   search={async (q) => {

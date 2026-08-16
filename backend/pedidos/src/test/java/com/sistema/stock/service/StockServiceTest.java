@@ -3,6 +3,7 @@ package com.sistema.stock.service;
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
 import com.sistema.common.model.PageResponse;
+import com.sistema.stock.adapter.in.web.dto.LoteResponse;
 import com.sistema.stock.model.Item;
 import com.sistema.stock.model.Lote;
 import com.sistema.stock.model.MovimientoStock;
@@ -370,6 +371,47 @@ class StockServiceTest {
 	}
 
 	@Test
+	void disponibleDeLoteRestaEgresosYMermas() {
+		Long itemId = itemConIngreso("DISLOTE", new BigDecimal("100.000"));
+		Lote lote = loteRepository.findByItemId(itemId).get(0);
+		movimientoRepository.save(new MovimientoStock(TipoMovimiento.EGRESO_VENTA, itemId, lote.getId(), 1L,
+				new BigDecimal("30.000"), LocalDateTime.now(), "egreso"));
+		movimientoRepository.save(new MovimientoStock(TipoMovimiento.MERMA, itemId, lote.getId(), null,
+				new BigDecimal("10.000"), LocalDateTime.now(), "merma"));
+
+		assertEquals(0, new BigDecimal("60.000").compareTo(stockService.obtenerDisponibleDeLote(itemId, lote.getId())));
+	}
+
+	@Test
+	void listarTodosLosLotesDevuelveTodos() {
+		LocalDate hoy = LocalDate.now();
+		loteRepository.save(new Lote(1L, "L1", hoy, hoy.plusDays(10), new BigDecimal("5.000")));
+		loteRepository.save(new Lote(2L, "L2", hoy, null, new BigDecimal("7.000")));
+
+		List<Lote> resultado = stockService.listarTodosLosLotes();
+
+		assertEquals(2, resultado.size());
+	}
+
+	@Test
+	void estadoDerivadoVencidoAgotadoYVigente() {
+		LocalDate hoy = LocalDate.now();
+		// Vencido: fecha anterior a hoy, sin importar el saldo.
+		assertEquals("VENCIDO",
+				LoteResponse.derivarEstado(hoy.minusDays(1), new BigDecimal("10.000")));
+		// Agotado: sin saldo disponible y no vencido.
+		assertEquals("AGOTADO", LoteResponse.derivarEstado(hoy.plusDays(5), BigDecimal.ZERO));
+		// Agotado: disponible negativo.
+		assertEquals("AGOTADO", LoteResponse.derivarEstado(hoy.plusDays(5), new BigDecimal("-3.000")));
+		// Vigente: con saldo y sin vencer.
+		assertEquals("VIGENTE", LoteResponse.derivarEstado(hoy.plusDays(5), new BigDecimal("4.000")));
+		// Vigente: sin fecha de vencimiento pero con saldo.
+		assertEquals("VIGENTE", LoteResponse.derivarEstado(null, new BigDecimal("4.000")));
+		// Vencido tiene prioridad sobre agotado.
+		assertEquals("VENCIDO", LoteResponse.derivarEstado(hoy.minusDays(1), BigDecimal.ZERO));
+	}
+
+	@Test
 	void listarItemsPaginadoBuscaPorQ() {
 		stockService.crearItem(new GestionarItem.CrearItemCommand("H1", "Harina 000", "KG", null, null, null));
 		stockService.crearItem(new GestionarItem.CrearItemCommand("A1", "Aceite 1L", "UN", null, null, null));
@@ -506,6 +548,11 @@ class StockServiceTest {
 			return datos.values().stream()
 					.filter(l -> l.getFechaVencimiento() != null && !l.getFechaVencimiento().isAfter(fecha))
 					.toList();
+		}
+
+		@Override
+		public List<Lote> findAll() {
+			return new ArrayList<>(datos.values());
 		}
 	}
 

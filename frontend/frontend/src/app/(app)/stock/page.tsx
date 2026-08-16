@@ -28,6 +28,11 @@ export default function StockPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [lotes, setLotes] = useState<Lote[]>([]);
+  const [lotesLoading, setLotesLoading] = useState(true);
+  const [lotesError, setLotesError] = useState<string | null>(null);
+  const [lotesFilter, setLotesFilter] = useState<"todos" | "por-vencer" | "vencidos" | "agotados">("todos");
+
   const [selected, setSelected] = useState<ReporteStockItem | null>(null);
   const [movimientos, setMovimientos] = useState<MovimientoStock[]>([]);
   const [movLoading, setMovLoading] = useState(false);
@@ -57,6 +62,25 @@ export default function StockPage() {
   useEffect(() => {
     loadStock();
   }, [loadStock]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLotesLoading(true);
+    setLotesError(null);
+    apiGet<Lote[]>("/api/stock/lotes")
+      .then((data) => {
+        if (!cancelled) setLotes(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setLotesError(err instanceof Error ? err.message : "Error inesperado");
+      })
+      .finally(() => {
+        if (!cancelled) setLotesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!canOperate) return;
@@ -114,6 +138,29 @@ export default function StockPage() {
     return stockItem.disponible <= 0 || stockItem.disponible < stockItem.reservasActivas;
   }
 
+  const DIAS_POR_VENCER = 30;
+  function filtrarLotes(): Lote[] {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const limite = new Date(hoy);
+    limite.setDate(limite.getDate() + DIAS_POR_VENCER);
+    return lotes.filter((l) => {
+      switch (lotesFilter) {
+        case "vencidos":
+          return l.estado === "VENCIDO";
+        case "agotados":
+          return l.estado === "AGOTADO";
+        case "por-vencer":
+          return (
+            l.fechaVencimiento !== null &&
+            new Date(l.fechaVencimiento as string).getTime() <= limite.getTime()
+          );
+        default:
+          return true;
+      }
+    });
+  }
+
   function openModal(next: StockModal) {
     setSuccessMsg(null);
     setFormError(null);
@@ -134,8 +181,6 @@ export default function StockPage() {
       setError(err instanceof Error ? err.message : "Error inesperado");
     }
   }
-
-  if (error) return <ErrorBox message={error} />;
 
   return (
     <div className="flex flex-col gap-6">
@@ -165,7 +210,9 @@ export default function StockPage() {
         </div>
       )}
 
-      {loading ? (
+      {error ? (
+        <ErrorBox message={error} />
+      ) : loading ? (
         <Loading />
       ) : (
         <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
@@ -307,6 +354,98 @@ export default function StockPage() {
           )}
         </section>
       )}
+
+      <section className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 px-5 py-3.5 dark:border-neutral-800">
+          <h2 className="font-medium text-neutral-900 dark:text-neutral-100">Lotes</h2>
+          <div className="flex flex-wrap gap-2 text-xs">
+            {(
+              [
+                ["todos", "Todos"],
+                ["por-vencer", `Por vencer (${DIAS_POR_VENCER} días)`],
+                ["vencidos", "Vencidos"],
+                ["agotados", "Agotados"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setLotesFilter(value)}
+                className={`rounded-full px-3 py-1 font-medium transition-colors ${
+                  lotesFilter === value
+                    ? "bg-blue-600 text-white"
+                    : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {lotesLoading ? (
+          <Loading label="Cargando lotes..." />
+        ) : lotesError ? (
+          <div className="p-5">
+            <ErrorBox message={lotesError} />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
+                  <th className="px-5 py-2.5 font-medium">Item</th>
+                  <th className="px-5 py-2.5 font-medium">Código de lote</th>
+                  <th className="px-5 py-2.5 font-medium">Vencimiento</th>
+                  <th className="px-5 py-2.5 font-medium text-right">Disponible</th>
+                  <th className="px-5 py-2.5 font-medium">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                {filtrarLotes().length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-6 text-center text-neutral-500">
+                      No hay lotes para este filtro
+                    </td>
+                  </tr>
+                )}
+                {filtrarLotes().map((lote) => {
+                  const estadoStyles =
+                    lote.estado === "VENCIDO"
+                      ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                      : lote.estado === "AGOTADO"
+                        ? "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200"
+                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+                  return (
+                    <tr key={lote.id}>
+                      <td className="px-5 py-2.5 text-neutral-900 dark:text-neutral-100">
+                        {lote.itemNombre ?? `Item #${lote.itemId}`}
+                        {lote.itemSku && (
+                          <span className="ml-2 font-mono text-xs text-neutral-500">{lote.itemSku}</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-2.5 font-mono text-neutral-700 dark:text-neutral-300">
+                        {lote.codigoLote}
+                      </td>
+                      <td className="px-5 py-2.5 text-neutral-600 dark:text-neutral-400">
+                        {lote.fechaVencimiento ? formatDate(lote.fechaVencimiento) : "-"}
+                      </td>
+                      <td className="px-5 py-2.5 text-right font-medium text-neutral-700 dark:text-neutral-300">
+                        {formatNumber(lote.disponible)}
+                      </td>
+                      <td className="px-5 py-2.5">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${estadoStyles}`}
+                        >
+                          {lote.estado}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {modal === "ingreso" && (
         <IngresoForm

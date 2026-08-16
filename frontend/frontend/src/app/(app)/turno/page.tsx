@@ -321,9 +321,18 @@ export default function TurnoPage() {
                 <>
                   <PedidoCard
                     pedido={current}
+                    cliente={clientesById.get(current.clienteId)}
                     clienteNombre={clientesById.get(current.clienteId)?.razonSocial}
                     posicion={enViaje.indexOf(current) + 1}
                     total={enViaje.length}
+                    paradasRestantes={enViaje
+                      .slice(queueIndex + 1)
+                      .map((p) => ({
+                        numero: p.numero,
+                        clienteNombre:
+                          clientesById.get(p.clienteId)?.razonSocial ??
+                          `Cliente #${p.clienteId}`,
+                      }))}
                   />
 
                   {queueIndex < enViaje.length - 1 && (
@@ -558,30 +567,53 @@ function TurnoHeader({
 
 function PedidoCard({
   pedido,
+  cliente,
   clienteNombre,
   posicion,
   total,
+  paradasRestantes,
 }: {
   pedido: Pedido;
+  cliente: Cliente | undefined;
   clienteNombre: string | undefined;
   posicion: number;
   total: number;
+  paradasRestantes: { numero: string; clienteNombre: string }[];
 }) {
+  const domicilio = cliente?.domicilio?.trim();
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <span className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
             {pedido.numero}
           </span>
           <span className="text-base text-neutral-600 dark:text-neutral-300">
             {clienteNombre ?? `Cliente #${pedido.clienteId}`}
           </span>
+          {domicilio ? (
+            <span className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+              📍 {domicilio}
+            </span>
+          ) : (
+            <span className="mt-1 text-xs italic text-neutral-400 dark:text-neutral-500">
+              Sin domicilio cargado
+            </span>
+          )}
         </div>
-        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+        <span className="shrink-0 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
           {posicion} / {total}
         </span>
       </div>
+
+      {pedido.observaciones?.trim() ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/30">
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Observaciones</p>
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            {pedido.observaciones.trim()}
+          </p>
+        </div>
+      ) : null}
 
       <ul className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-800">
         {pedido.items.map((it) => (
@@ -608,6 +640,29 @@ function PedidoCard({
           {formatMoney(pedido.total)}
         </span>
       </div>
+
+      {paradasRestantes.length > 0 && (
+        <div className="border-t border-neutral-200 pt-4 dark:border-neutral-800">
+          <p className="mb-2 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+            Próximas paradas ({paradasRestantes.length})
+          </p>
+          <ol className="flex flex-col gap-1.5">
+            {paradasRestantes.map((p, i) => (
+              <li key={p.numero} className="flex items-center justify-between gap-3 text-sm">
+                <span className="flex items-center gap-2 text-neutral-600 dark:text-neutral-300">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+                    {posicion + i + 1}
+                  </span>
+                  <span className="truncate">{p.clienteNombre}</span>
+                </span>
+                <span className="shrink-0 font-medium text-neutral-500 dark:text-neutral-400">
+                  {p.numero}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </div>
   );
 }

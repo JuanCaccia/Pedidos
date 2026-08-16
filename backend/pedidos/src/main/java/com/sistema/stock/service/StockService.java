@@ -294,6 +294,11 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	}
 
 	private BigDecimal disponibleDeLote(Long itemId, Long loteId) {
+		return obtenerDisponibleDeLote(itemId, loteId);
+	}
+
+	@Override
+	public BigDecimal obtenerDisponibleDeLote(Long itemId, Long loteId) {
 		List<MovimientoStock> movimientos = movimientoStockRepository.findByItemIdOrderByFechaAsc(itemId);
 		BigDecimal ingresos = movimientos.stream()
 				.filter(m -> m.getTipo() == TipoMovimiento.INGRESO && loteId.equals(m.getLoteId()))
@@ -325,6 +330,11 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	@Override
 	public List<Lote> listarLotesPorVencer(int dias) {
 		return loteRepository.findByFechaVencimientoNotNullAndFechaVencimientoLessThanEqual(LocalDate.now().plusDays(dias));
+	}
+
+	@Override
+	public List<Lote> listarTodosLosLotes() {
+		return loteRepository.findAll();
 	}
 
 	private Item obtenerItemO404(Long itemId) {

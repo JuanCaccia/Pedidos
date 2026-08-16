@@ -109,6 +109,10 @@ export interface Lote {
   fechaIngreso: string;
   fechaVencimiento: string | null;
   cantidadIngresada: number;
+  disponible: number;
+  estado: "VENCIDO" | "AGOTADO" | "VIGENTE";
+  itemNombre: string | null;
+  itemSku: string | null;
 }
 
 export interface IngresoRequest {

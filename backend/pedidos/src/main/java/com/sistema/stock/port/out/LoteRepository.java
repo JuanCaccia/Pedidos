@@ -15,4 +15,6 @@ public interface LoteRepository {
 	List<Lote> findByItemId(Long itemId);
 
 	List<Lote> findByFechaVencimientoNotNullAndFechaVencimientoLessThanEqual(LocalDate fecha);
+
+	List<Lote> findAll();
 }

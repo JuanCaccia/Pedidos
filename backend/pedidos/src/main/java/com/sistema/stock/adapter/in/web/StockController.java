@@ -31,6 +31,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/stock")
@@ -93,13 +95,47 @@ public class StockController {
 
 	@GetMapping("/items/{itemId}/lotes")
 	public List<LoteResponse> listarLotes(@PathVariable Long itemId) {
-		return consultarStock.listarLotes(itemId).stream().map(LoteResponse::from).toList();
+		return consultarStock.listarLotes(itemId).stream()
+				.map(lote -> LoteResponse.from(lote,
+						consultarStock.obtenerDisponibleDeLote(itemId, lote.getId()), null, null))
+				.toList();
 	}
 
 	@GetMapping("/lotes/por-vencer")
 	@Operation(summary = "Lotes con vencimiento dentro de los proximos N dias (incluye vencidos)")
 	public List<LoteResponse> lotesPorVencer(@RequestParam(defaultValue = "30") int dias) {
-		return consultarStock.listarLotesPorVencer(dias).stream().map(LoteResponse::from).toList();
+		Map<Long, Item> items = indexarItems();
+		return consultarStock.listarLotesPorVencer(dias).stream()
+				.map(lote -> LoteResponse.from(lote,
+						consultarStock.obtenerDisponibleDeLote(lote.getItemId(), lote.getId()),
+						nombreDe(items, lote.getItemId()), skuDe(items, lote.getItemId())))
+				.toList();
+	}
+
+	@GetMapping("/lotes")
+	@Operation(summary = "Todos los lotes con saldo disponible y estado derivado (VENCIDO/AGOTADO/VIGENTE)")
+	public List<LoteResponse> listarTodosLosLotes() {
+		Map<Long, Item> items = indexarItems();
+		return consultarStock.listarTodosLosLotes().stream()
+				.map(lote -> LoteResponse.from(lote,
+						consultarStock.obtenerDisponibleDeLote(lote.getItemId(), lote.getId()),
+						nombreDe(items, lote.getItemId()), skuDe(items, lote.getItemId())))
+				.toList();
+	}
+
+	private Map<Long, Item> indexarItems() {
+		return consultarStock.listarItems().stream()
+				.collect(Collectors.toMap(Item::getId, item -> item, (a, b) -> a));
+	}
+
+	private String nombreDe(Map<Long, Item> items, Long itemId) {
+		Item item = items.get(itemId);
+		return item != null ? item.getNombre() : null;
+	}
+
+	private String skuDe(Map<Long, Item> items, Long itemId) {
+		Item item = items.get(itemId);
+		return item != null ? item.getSku() : null;
 	}
 
 	private com.sistema.usuario.model.Usuario obtenerActorActual() {

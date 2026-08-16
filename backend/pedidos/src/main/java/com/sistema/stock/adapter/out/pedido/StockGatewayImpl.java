@@ -84,7 +84,7 @@ public class StockGatewayImpl implements StockGateway {
 	@Override
 	public List<Long> listarLoteIdsDisponibles(Long itemId) {
 		return stockService.listarLotes(itemId).stream()
-				.filter(lote -> disponibleDeLote(itemId, lote.getId()).signum() > 0)
+				.filter(lote -> stockService.obtenerDisponibleDeLote(itemId, lote.getId()).signum() > 0)
 				.map(com.sistema.stock.model.Lote::getId)
 				.toList();
 	}
@@ -107,20 +107,5 @@ public class StockGatewayImpl implements StockGateway {
 		return stockService.buscarItemPorId(itemId)
 				.map(Item::getPrecioLista)
 				.orElse(BigDecimal.ZERO);
-	}
-
-	private BigDecimal disponibleDeLote(Long itemId, Long loteId) {
-		List<MovimientoStock> movimientos = movimientoStockRepository.findByItemIdOrderByFechaAsc(itemId);
-		BigDecimal ingresos = sumarPorLote(movimientos, TipoMovimiento.INGRESO, loteId);
-		BigDecimal egresos = sumarPorLote(movimientos, TipoMovimiento.EGRESO_VENTA, loteId);
-		BigDecimal mermas = sumarPorLote(movimientos, TipoMovimiento.MERMA, loteId);
-		return ingresos.subtract(egresos).subtract(mermas);
-	}
-
-	private BigDecimal sumarPorLote(List<MovimientoStock> movimientos, TipoMovimiento tipo, Long loteId) {
-		return movimientos.stream()
-				.filter(m -> m.getTipo() == tipo && loteId.equals(m.getLoteId()))
-				.map(MovimientoStock::getCantidad)
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
 }

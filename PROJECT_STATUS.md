@@ -9,7 +9,7 @@
 
 ## Status
 
-**COMPLETA / VERIFICADA — Backend 163 tests + E2E Playwright 7 tests en verde; Fase D cerrada; Bloque P1.A de saneamiento (integridad de dominio) aplicado y verificado.**
+**COMPLETA / VERIFICADA — Backend 166 tests + E2E Playwright 7 tests en verde; Fase D cerrada; Bloques P1.A (integridad) y P1.B (usabilidad crítica) de saneamiento aplicados y verificados.**
 
 ## Milestone Objective
 
@@ -23,7 +23,7 @@ TTL de reservas, consolidación, export CSV).
 
 La mayoría de los flujos centrales **funcionan y son consistentes** entre backend y frontend
 (ciclo de pedido, consolidación, OC/recepción, cobranzas, faltantes+notificaciones, CSV,
-TTL config). Backend: **163 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
+TTL config). Backend: **166 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
 Los dos bloqueantes P1 de C8 (BUG-002 autorización, BUG-003 sustitución con diferencia
 negativa) fueron **resueltos y verificados en vivo**. Persisten como P1: BUG-004 (cierre de
 jornada con EN_VIAJE colgados) y BUG-005 (decisión de alcance "pedido express"). Además
@@ -51,7 +51,7 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 
 ## Completed
 
-* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (163 tests verdes).
+* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (166 tests verdes).
 * Frontend Next.js 16.3 completo (login, dashboard, pedidos, stock, clientes/items/usuarios/
   proveedores, rutas+entregas, OC, cobranzas+caja, turno) — build OK.
 * Migraciones Flyway V1→V16 validadas.
@@ -61,6 +61,11 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
   - Soft delete con semántica real: item/cliente/proveedor inactivo rechazado en pedidos, OC, reservas, mermas y ajustes; capacidad `?activos=true` en comboboxes.
   - FEFO seguro: `egresarPorLotes` excluye lotes vencidos (`fechaVencimiento < hoy`).
   - Cobranza íntegra: valida `pedidoId ↔ clienteId` y estado en `{EN_VIAJE, ENTREGADO, ENTREGADO_PARCIAL}`.
+- **Saneamiento Bloque P1.B (usabilidad crítica) aplicado y verificado:**
+  - Carrito: cambiar categoría en NuevoPedidoForm ya no borra los items agregados (label estable vía `valueLabel`).
+  - Turno operativo: PedidoCard muestra domicilio, observaciones y próximas paradas del repartidor.
+  - Lotes en stock: `LoteResponse` con saldo/estado (VENCIDO/AGOTADO/VIGENTE) + `GET /stock/lotes` + sección de Lotes con filtros en `/stock`.
+  - Fix de build: `tsconfig` excluye `e2e/` del typecheck (los specs no bloquean el build de la app).
 
 ## Partially Completed
 
@@ -139,7 +144,7 @@ completed: yes (subagente + verificación manual de bloqueantes)
 result: 2 bloqueantes (BUG-002, BUG-003) RESUELTOS y verificados + 13 hallazgos (QA-01..13) + STR
 
 Automated tests:
-- Backend: **163 tests, 0 fallos** (surefire).
+- Backend: **166 tests, 0 fallos** (surefire).
 - Frontend: **sin tests unitarios; E2E con Playwright: 7 tests verdes, estable como gate de CI** (`npm run test:e2e`).
 
 End-to-end verification:

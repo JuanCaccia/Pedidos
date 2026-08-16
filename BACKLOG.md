@@ -234,32 +234,33 @@
 - **Estado:** ✅ **Resuelto** — `CobranzaService.registrar` valida existencia (NotFound), pertenencia al cliente (`:67`) y estado en `{EN_VIAJE, ENTREGADO, ENTREGADO_PARCIAL}` (`:29,:71`) con `COBRANZA_PEDIDO_INVALIDO`. Verificado por QA.
 - **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
-### AUD-004 — Cambiar categoría en NuevoPedidoForm borra items agregados (P1)
+### AUD-004 — Cambiar categoría en NuevoPedidoForm borra items agregados (P1) ✅ RESUELTO
 
 - **Tipo:** bug de UX · **Prioridad:** P1
 - **Área:** frontend pedidos
 - **Evidencia:** `pedidos/page.tsx:1250-1253` setea `itemId:null` en todas las líneas al cambiar categoría; luego `:1143` descarta silenciosamente líneas sin item.
 - **Impacto:** pedidos creados incompletos sin feedback; re-trabajo del vendedor.
-- **AC:** preservar selección al cambiar categoría (o confirmar); nunca descartar en silencio.
-- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+- **Estado:** ✅ **Resuelto** — el `onChange` de categoría ya NO resetea `itemId` (solo `setCategoria`); cada línea conserva su `itemLabel`; `key={linea.key}` sin categoría; `Combobox.tsx` gana prop `valueLabel` para mostrar el label sin depender del search. Verificado por QA.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
-### AUD-005 — Turno del repartidor no muestra domicilio ni paradas restantes (P1)
+### AUD-005 — Turno del repartidor no muestra domicilio ni paradas restantes (P1) ✅ RESUELTO
 
 - **Tipo:** gap operativo · **Prioridad:** P1
 - **Área:** frontend turno
 - **Evidencia:** `turno/page.tsx` `PedidoCard:559-613` muestra numero/cliente/items/total pero NO domicilio (existe en tipo `Cliente`) ni observaciones ni lista de paradas restantes.
 - **Impacto:** entregas fallidas/re-trabajo; sin planificación del recorrido.
-- **AC:** agregar domicilio + observaciones + contador/lista de paradas pendientes en PedidoCard.
-- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+- **Estado:** ✅ **Resuelto** — `PedidoCard` recibe `cliente` completo y `paradasRestantes`; muestra domicilio (📍 o "Sin domicilio cargado"), observaciones del pedido, y lista "Próximas paradas (N)". Verificado por QA.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
-### AUD-006 — Stock no expone lotes vencidos/por vencer/descartados (P1)
+### AUD-006 — Stock no expone lotes vencidos/por vencer/descartados (P1) ✅ RESUELTO
 
 - **Tipo:** gap operativo · **Prioridad:** P1
 - **Área:** frontend stock / backend consultas
 - **Evidencia:** `stock/page.tsx:172-239` tabla sin vencimiento; `/stock/lotes/por-vencer` existe pero `LoteResponse` no expone saldo; el dashboard "Lotes por vencer" linkea a `/stock` que no lo muestra.
 - **Impacto:** encargado no detecta preventivamente qué vence; entrega de vencido / pérdida silenciosa.
-- **AC:** vista/tabla de lotes con vencimiento, estado y saldo en `/stock` + saldo por lote en el endpoint.
-- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+- **Estado:** ✅ **Resuelto** — `LoteResponse` expone `disponible`, `estado` (VENCIDO/AGOTADO/VIGENTE), `itemNombre`, `itemSku`; `disponibleDeLote` sube al port; nuevo `GET /stock/lotes`; frontend `/stock` con sección de Lotes y filtros (Todos/Por vencer/Vencidos/Agotados). Verificado por QA.
+- **Nota (limitación pendiente):** la tabla principal de `/stock` carga de `/api/reportes/stock` (solo ADMINISTRATIVO por SecurityConfig); un ENCARGADO_DEPOSITO recibe 403 en esa tabla. La sección de Lotes sí es accesible. Pendiente: abrir el stock por item al rol depósito.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
 ### AUD-007 — Categoría de Item como texto libre (P2)
 

@@ -1,7 +1,8 @@
 # Roadmap — Sistema de Pedidos, Stock y Ventas
 
 > Priorización acordada (2026-08): **Fase A completa** ✅ · **Fase B completa** ✅ ·
-> **Fase C completa** ✅ · **Fase D EN EJECUCIÓN** (cimientos técnicos, resiliencia y QA).
+> **Fase C completa** ✅ · **Fase D COMPLETA** ✅ (cimientos técnicos, resiliencia y QA) ·
+> **Saneamiento Funcional (P1/P2) COMPLETO** ✅.
 
 ## Estado actual
 
@@ -10,13 +11,13 @@
   `pedido` (circuito con `PENDIENTE_STOCK`, pedido hijo), `ruta` (despacho +
   asignación), `compra` (proveedores + OC con recepción → stock), `cobranza`
   (remitos + cobranzas + cuenta de cliente), `reporte` (stock/ventas/rutas/caja),
-  `sustitucion`, `notificacion`, seguridad JWT + BCrypt, auditoría, springdoc, actuator (health/info). **148 tests**.
+  `sustitucion`, `notificacion`, seguridad JWT + BCrypt, auditoría, springdoc, actuator (health/info). **198 tests**.
 - **Frontend** completo: login, Dashboard (alertas: stock bajo, pendientes,
   re-agendados, lotes por vencer), Pedidos (cliente+zona, acciones por rol),
   Stock (operativo), Clientes/Items/Usuarios/Proveedores (ABMC), Rutas +
   Entregas, Órdenes de Compra, Cobranzas + Caja. Next.js 16 + Tailwind v4,
   auditado con Impeccable.
-- Migraciones Flyway V1→V16 · Dockerfile backend/frontend + compose · CI en
+- Migraciones Flyway V1→V19 · Dockerfile backend/frontend + compose · CI en
   GitHub Actions · App local en containers Podman (`:8080/api` + `:3000`).
 - Observabilidad base (D3): `/actuator/health` público (con liveness/readiness y detalles DB por rol), `/actuator/info` solo `ADMINISTRATIVO`.
 
@@ -57,7 +58,7 @@ resueltos (autorización por rol, sustitución con diferencia negativa).
 
 ---
 
-## Fase D — Cimientos técnicos, resiliencia y QA (EN EJECUCIÓN)
+## Fase D — Cimientos técnicos, resiliencia y QA ✅ COMPLETA
 
 CI/CD completo, monitoreo (actuator/métricas), API versioning, tests e2e
 (Playwright), índices/consultas de reportes optimizadas, multi-depósito /
@@ -78,7 +79,22 @@ multi-empresa, integraciones externas (AFIP, pasarelas de pago).
 
 ### D4 — Tests E2E (Playwright) ✅ COMPLETA
 - `@playwright/test` + chromium en el frontend; `playwright.config.ts` (baseURL :3000, reuseExistingServer).
-- 7 tests E2E: login válido, login inválido, navegación repartidor, crear pedido express,
+- 8 tests E2E: login válido, login inválido, navegación repartidor, crear pedido express,
   flujo repartidor/turno (ENTREGADO), consolidación de pedidos, sustitución en destino (+cobranza).
 - Script `npm run test:e2e` + job `e2e` en CI (postgres + backend + frontend + playwright).
-- Suite estable como gate de CI (verificado 7/7 ×2).
+- Suite estable como gate de CI (verificado 8/8 ×2).
+
+---
+
+## Saneamiento Funcional (P1/P2) ✅ COMPLETO
+
+### P1 — Integridad de dominio y usabilidad crítica ✅ COMPLETA
+- P1.A integridad de dominio: validación de reglas de negocio críticas
+  (estados cobrables, reservas, FEFO, consolidación).
+- P1.B usabilidad crítica: corrección de flujos operativos bloqueantes
+  (autorización por rol, sustitución con diferencia negativa, cierre de jornada).
+
+### P2 — Catálogo, accesos y modelado de stock ✅ COMPLETA
+- P2.A catálogo, accesos y navegabilidad: categorías (corte limpio V17), búsqueda
+  server-side, navegación por estados.
+- P2.B modelado de stock: estado de lote (V18-V19), ajustes firmados, disponibleDeLote.

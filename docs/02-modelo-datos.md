@@ -9,21 +9,193 @@
 
 ## Entity relationships (overview)
 
-```
-usuario ──< usuario_roles (composite)
-cliente ──< pedido >── pedido_item >── item
-zona ──< cliente                item ──< lote >── proveedor
-zona ──< ruta >── ruta_pedido ──< pedido        item >── categoria
-pedido ──< pedido (self-FK pedido_padre_id)      lote >── movimiento_stock
-pedido ──< remito ──< remito_linea >── item
-cliente ──< cobranza ──< pedido (nullable)
-proveedor ──< orden_compra ──< orden_compra_linea >── item
-pedido ──< sustitucion (item_original / item_sustituto)
-pedido ──< notificacion ──< usuario (para_usuario)
-```
+The diagram below shows the entities and their relationships at a glance. Each
+relationship line reads as **one-to-many**: the parent entity (`||--o{`) holds
+the foreign key that points back to one row of the parent; the cardinality is
+`1` on the parent side and `0..n` on the child side. The label on each line
+describes the role of the foreign key (for example `PEDIDO` → `USUARIO` as the
+*vendedor*). A nullable relation (e.g. `pedido` on `cobranza`) is drawn the
+same way — nullability is a per-column detail captured in the tables below.
+Entity column lists are abbreviated here; the full columns live in the
+["Tables by migration"](#tables-by-migration) section.
 
-Legend: `>` = FK to the referenced table; `──<` = one-to-many (the `<` is on
-the "many" side).
+```mermaid
+erDiagram
+    USUARIO ||--o{ USUARIO_ROLES : "tiene roles"
+    USUARIO ||--o{ PEDIDO : "vendedor"
+    USUARIO ||--o{ RUTA : "repartidor"
+    ZONA ||--o{ CLIENTE : "agrupa"
+    CLIENTE ||--o{ PEDIDO : "hace pedidos"
+    CLIENTE ||--o{ COBRANZA : "recibe cobranzas"
+    CLIENTE ||--o{ REMITO : "recibe remitos"
+    CATEGORIA ||--o{ ITEM : "clasifica"
+    ITEM ||--o{ LOTE : "tiene lotes"
+    ITEM ||--o{ MOVIMIENTO_STOCK : "genera movimientos"
+    ITEM ||--o{ PEDIDO_ITEM : "se pide"
+    ITEM ||--o{ ORDEN_COMPRA_LINEA : "se compra"
+    ITEM ||--o{ REMITO_LINEA : "se entrega"
+    ITEM ||--o{ SUSTITUCION : "original/sustituto"
+    PROVEEDOR ||--o{ ORDEN_COMPRA : "emite compras"
+    PROVEEDOR ||--o{ LOTE : "provee"
+    PEDIDO ||--o{ PEDIDO_ITEM : "contiene"
+    PEDIDO ||--o{ MOVIMIENTO_STOCK : "genera"
+    PEDIDO ||--o{ RUTA_PEDIDO : "se asigna"
+    PEDIDO ||--o{ REMITO : "genera"
+    PEDIDO ||--o{ COBRANZA : "cobra (nullable)"
+    PEDIDO ||--o{ SUSTITUCION : "sustituye"
+    PEDIDO ||--o{ PEDIDO : "pedido_padre"
+    RUTA ||--o{ RUTA_PEDIDO : "incluye"
+    ORDEN_COMPRA ||--o{ ORDEN_COMPRA_LINEA : "detalla"
+    REMITO ||--o{ REMITO_LINEA : "detalla"
+    NOTIFICACION }o--|| USUARIO : "para_usuario"
+
+    USUARIO {
+        bigint id PK
+        varchar nombre
+        varchar email UK
+        varchar password_hash
+        boolean activo
+    }
+    USUARIO_ROLES {
+        bigint usuario_id FK
+        varchar rol
+    }
+    ZONA {
+        bigint id PK
+        varchar nombre UK
+        boolean activo
+    }
+    CLIENTE {
+        bigint id PK
+        varchar razon_social
+        varchar cuit UK
+        bigint zona_id FK
+        boolean activo
+    }
+    CATEGORIA {
+        bigint id PK
+        varchar nombre UK
+        boolean activo
+    }
+    ITEM {
+        bigint id PK
+        varchar sku UK
+        varchar nombre
+        varchar unidad_medida
+        bigint categoria_id FK
+        numeric precio_lista
+        numeric stock_minimo
+        boolean activo
+    }
+    PROVEEDOR {
+        bigint id PK
+        varchar razon_social
+        varchar cuit UK
+        boolean activo
+    }
+    PEDIDO {
+        bigint id PK
+        varchar numero UK
+        bigint cliente_id FK
+        bigint vendedor_id FK
+        bigint pedido_padre_id FK
+        varchar estado
+        date fecha_creacion
+        boolean express
+        numeric total
+    }
+    PEDIDO_ITEM {
+        bigint id PK
+        bigint pedido_id FK
+        bigint item_id FK
+        numeric cantidad_pedida
+        numeric precio_unitario
+    }
+    MOVIMIENTO_STOCK {
+        bigint id PK
+        varchar tipo
+        bigint item_id FK
+        bigint lote_id FK
+        bigint pedido_id FK
+        numeric cantidad
+        date fecha
+    }
+    RUTA {
+        bigint id PK
+        bigint zona_id FK
+        bigint repartidor_id FK
+        date fecha_jornada
+        varchar estado
+    }
+    RUTA_PEDIDO {
+        bigint ruta_id FK
+        bigint pedido_id FK
+    }
+    ORDEN_COMPRA {
+        bigint id PK
+        varchar numero UK
+        bigint proveedor_id FK
+        date fecha
+        varchar estado
+    }
+    ORDEN_COMPRA_LINEA {
+        bigint id PK
+        bigint orden_compra_id FK
+        bigint item_id FK
+        numeric cantidad_pedida
+        numeric precio_unitario
+    }
+    LOTE {
+        bigint id PK
+        bigint item_id FK
+        bigint proveedor_id FK
+        varchar codigo_lote
+        date fecha_ingreso
+        date fecha_vencimiento
+        numeric cantidad_ingresada
+        varchar estado
+    }
+    REMITO {
+        bigint id PK
+        varchar numero UK
+        bigint pedido_id FK
+        bigint cliente_id FK
+        date fecha_emision
+        numeric monto_total
+    }
+    REMITO_LINEA {
+        bigint id PK
+        bigint remito_id FK
+        bigint item_id FK
+        numeric cantidad
+        numeric precio_unitario
+    }
+    COBRANZA {
+        bigint id PK
+        bigint cliente_id FK
+        bigint pedido_id FK
+        numeric monto
+        varchar forma_pago
+        date fecha
+    }
+    SUSTITUCION {
+        bigint id PK
+        bigint pedido_id FK
+        bigint item_original_id FK
+        bigint item_sustituto_id FK
+        numeric cantidad
+        date fecha
+    }
+    NOTIFICACION {
+        bigint id PK
+        bigint para_usuario_id FK
+        bigint pedido_id FK
+        varchar tipo
+        varchar mensaje
+        boolean leida
+        date fecha
+    }
+```
 
 ---
 

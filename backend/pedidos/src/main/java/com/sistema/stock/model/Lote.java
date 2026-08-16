@@ -7,10 +7,12 @@ public class Lote {
 
 	private Long id;
 	private Long itemId;
+	private Long proveedorId;
 	private String codigoLote;
 	private LocalDate fechaIngreso;
 	private LocalDate fechaVencimiento;
 	private BigDecimal cantidadIngresada;
+	private LoteEstado estado = LoteEstado.VIGENTE;
 
 	public Lote() {
 	}
@@ -37,6 +39,14 @@ public class Lote {
 
 	public void setItemId(Long itemId) {
 		this.itemId = itemId;
+	}
+
+	public Long getProveedorId() {
+		return proveedorId;
+	}
+
+	public void setProveedorId(Long proveedorId) {
+		this.proveedorId = proveedorId;
 	}
 
 	public String getCodigoLote() {
@@ -69,5 +79,13 @@ public class Lote {
 
 	public void setCantidadIngresada(BigDecimal cantidadIngresada) {
 		this.cantidadIngresada = cantidadIngresada;
+	}
+
+	public LoteEstado getEstado() {
+		return estado;
+	}
+
+	public void setEstado(LoteEstado estado) {
+		this.estado = estado;
 	}
 }

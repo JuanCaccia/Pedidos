@@ -6,10 +6,12 @@ import com.sistema.common.exception.NotFoundException;
 import com.sistema.common.model.PageResponse;
 import com.sistema.stock.model.Item;
 import com.sistema.stock.model.Lote;
+import com.sistema.stock.model.LoteEstado;
 import com.sistema.stock.model.MovimientoStock;
 import com.sistema.stock.model.TipoMovimiento;
 import com.sistema.stock.port.in.AjustarInventario;
 import com.sistema.stock.port.in.ConsultarStock;
+import com.sistema.stock.port.in.DescartarLote;
 import com.sistema.stock.port.in.GestionarItem;
 import com.sistema.stock.port.in.GestionarMerma;
 import com.sistema.stock.port.in.RegistrarIngreso;
@@ -31,7 +33,7 @@ import java.util.Optional;
 
 @Service
 @Transactional(readOnly = true)
-public class StockService implements GestionarItem, RegistrarIngreso, GestionarMerma, AjustarInventario, ConsultarStock {
+public class StockService implements GestionarItem, RegistrarIngreso, GestionarMerma, AjustarInventario, ConsultarStock, DescartarLote {
 
 	private final ItemRepository itemRepository;
 	private final LoteRepository loteRepository;
@@ -138,6 +140,7 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 				? "Ingreso de proveedor"
 				: command.motivo().trim();
 		Lote lote = new Lote(item.getId(), codigoLote, LocalDate.now(), command.fechaVencimiento(), command.cantidad());
+		lote.setProveedorId(command.proveedorId());
 		Lote guardado = loteRepository.save(lote);
 		movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.INGRESO, item.getId(), guardado.getId(),
 				null, command.cantidad(), LocalDateTime.now(), motivo));
@@ -183,6 +186,14 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		if (command.motivo() == null || command.motivo().isBlank()) {
 			throw new BusinessException("VALIDATION_ERROR", "Se requiere un motivo para el ajuste de inventario");
 		}
+		Long loteId = command.loteId();
+		if (loteId != null) {
+			Lote lote = loteRepository.findById(loteId)
+					.orElseThrow(() -> new NotFoundException("Lote no encontrado: " + loteId));
+			if (!lote.getItemId().equals(item.getId())) {
+				throw new BusinessException("AJUSTE_LOTE_INCOMPATIBLE", "El lote no pertenece a ese item");
+			}
+		}
 		BigDecimal disponible = obtenerDisponible(item.getId());
 		if (disponible.add(command.cantidad()).signum() < 0) {
 			throw new BusinessException("AJUSTE_SIN_STOCK", "El ajuste dejaría stock negativo");
@@ -193,8 +204,11 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 						"El ajuste supera el máximo permitido (" + ajusteMaximoEncargado + "); requiere un usuario ADMINISTRATIVO");
 			}
 		}
+		// AUD-010: el ajuste puede llevarse a nivel item (loteId = null), conciliación global que no
+		// impacta el disponible de ningún lote individual, o a nivel lote (loteId != null) cuando se
+		// conoce la causa. disponibleDeLote contempla AJUSTE_INVENTARIO con lote_id (obtenerDisponibleDeLote).
 		return movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.AJUSTE_INVENTARIO, item.getId(),
-				null, null, command.cantidad(), LocalDateTime.now(), command.motivo().trim()));
+				loteId, null, command.cantidad(), LocalDateTime.now(), command.motivo().trim()));
 	}
 
 	@Transactional
@@ -202,8 +216,9 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		List<MovimientoStock> creados = new ArrayList<>();
 		BigDecimal restante = cantidad;
 		List<Lote> lotes = loteRepository.findByItemId(itemId).stream()
-				.filter(lote -> lote.getFechaVencimiento() == null
-						|| !lote.getFechaVencimiento().isBefore(LocalDate.now()))
+				.filter(lote -> lote.getEstado() != LoteEstado.DESCARTADO
+						&& (lote.getFechaVencimiento() == null
+								|| !lote.getFechaVencimiento().isBefore(LocalDate.now())))
 				.sorted(Comparator
 						.comparing((Lote l) -> l.getFechaVencimiento() == null ? Long.MAX_VALUE : l.getFechaVencimiento().toEpochDay())
 						.thenComparing(Lote::getFechaIngreso)
@@ -223,6 +238,10 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 					LocalDateTime.now(), "Egreso por venta pedido " + pedidoId));
 			creados.add(egreso);
 			restante = restante.subtract(aConsumir);
+			if (disponible.subtract(aConsumir).signum() <= 0 && lote.getEstado() != LoteEstado.AGOTADO) {
+				lote.setEstado(LoteEstado.AGOTADO);
+				loteRepository.save(lote);
+			}
 		}
 		if (restante.signum() > 0) {
 			creados.add(movimientoStockRepository.save(new MovimientoStock(
@@ -314,7 +333,27 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		BigDecimal mermas = movimientos.stream()
 				.filter(m -> m.getTipo() == TipoMovimiento.MERMA && loteId.equals(m.getLoteId()))
 				.map(MovimientoStock::getCantidad).reduce(BigDecimal.ZERO, BigDecimal::add);
-		return ingresos.subtract(egresos).subtract(mermas);
+		BigDecimal ajustes = movimientos.stream()
+				.filter(m -> m.getTipo() == TipoMovimiento.AJUSTE_INVENTARIO && loteId.equals(m.getLoteId()))
+				.map(MovimientoStock::getCantidad).reduce(BigDecimal.ZERO, BigDecimal::add);
+		return ingresos.add(ajustes).subtract(egresos).subtract(mermas);
+	}
+
+	@Transactional
+	@Override
+	public Lote descartar(Long loteId) {
+		Lote lote = loteRepository.findById(loteId)
+				.orElseThrow(() -> new NotFoundException("Lote no encontrado: " + loteId));
+		if (lote.getEstado() == LoteEstado.DESCARTADO) {
+			throw new BusinessException("LOTE_YA_DESCARTADO", "El lote ya está descartado");
+		}
+		BigDecimal disponible = obtenerDisponibleDeLote(lote.getItemId(), lote.getId());
+		if (disponible.signum() > 0) {
+			movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.MERMA, lote.getItemId(), lote.getId(),
+					null, disponible, LocalDateTime.now(), "Descartes de lote " + lote.getCodigoLote()));
+		}
+		lote.setEstado(LoteEstado.DESCARTADO);
+		return loteRepository.save(lote);
 	}
 
 	@Override
@@ -330,6 +369,11 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	@Override
 	public List<Lote> listarLotes(Long itemId) {
 		return loteRepository.findByItemId(itemId);
+	}
+
+	@Override
+	public List<Lote> listarLotesPorProveedor(Long proveedorId) {
+		return loteRepository.findByProveedorId(proveedorId);
 	}
 
 	@Override

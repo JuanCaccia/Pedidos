@@ -12,6 +12,7 @@ import com.sistema.stock.model.Lote;
 import com.sistema.stock.model.MovimientoStock;
 import com.sistema.stock.port.in.AjustarInventario;
 import com.sistema.stock.port.in.ConsultarStock;
+import com.sistema.stock.port.in.DescartarLote;
 import com.sistema.stock.port.in.GestionarMerma;
 import com.sistema.stock.port.in.RegistrarIngreso;
 import com.sistema.common.exception.NotFoundException;
@@ -43,20 +44,23 @@ public class StockController {
 	private final GestionarMerma gestionarMerma;
 	private final AjustarInventario ajustarInventario;
 	private final ConsultarStock consultarStock;
+	private final DescartarLote descartarLote;
 
 	public StockController(RegistrarIngreso registrarIngreso, GestionarMerma gestionarMerma,
-			AjustarInventario ajustarInventario, ConsultarStock consultarStock) {
+			AjustarInventario ajustarInventario, ConsultarStock consultarStock, DescartarLote descartarLote) {
 		this.registrarIngreso = registrarIngreso;
 		this.gestionarMerma = gestionarMerma;
 		this.ajustarInventario = ajustarInventario;
 		this.consultarStock = consultarStock;
+		this.descartarLote = descartarLote;
 	}
 
 	@PostMapping("/ingresos")
 	@Operation(summary = "Registra ingreso de proveedor: crea lote y movimiento INGRESO")
 	public ResponseEntity<IngresoResponse> registrarIngreso(@Valid @RequestBody IngresoRequest request) {
 		Lote lote = registrarIngreso.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
-				request.itemId(), request.codigoLote(), request.fechaVencimiento(), request.cantidad(), request.motivo()));
+				request.itemId(), request.codigoLote(), request.fechaVencimiento(), request.cantidad(), request.motivo(),
+				request.proveedorId()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(IngresoResponse.from(lote));
 	}
 
@@ -72,8 +76,16 @@ public class StockController {
 	@Operation(summary = "Ajuste de inventario firmado (+/-) para corregir diferencias fisicas")
 	public ResponseEntity<MovimientoStockResponse> ajustarInventario(@Valid @RequestBody AjusteRequest request) {
 		MovimientoStock movimiento = ajustarInventario.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(
-				request.itemId(), request.cantidad(), request.motivo(), obtenerActorActual()));
+				request.itemId(), request.cantidad(), request.motivo(), request.loteId(), obtenerActorActual()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(MovimientoStockResponse.from(movimiento));
+	}
+
+	@PostMapping("/lotes/{id}/descartar")
+	@Operation(summary = "Descartar lote: lo marca DESCARTADO y registra merma por el saldo disponible (si lo tiene)")
+	public ResponseEntity<LoteResponse> descartarLote(@PathVariable Long id) {
+		Lote lote = descartarLote.descartar(id);
+		return ResponseEntity.ok(LoteResponse.from(lote,
+				consultarStock.obtenerDisponibleDeLote(lote.getItemId(), lote.getId()), null, null));
 	}
 
 	@GetMapping("/items/{itemId}")
@@ -113,10 +125,14 @@ public class StockController {
 	}
 
 	@GetMapping("/lotes")
-	@Operation(summary = "Todos los lotes con saldo disponible y estado derivado (VENCIDO/AGOTADO/VIGENTE)")
-	public List<LoteResponse> listarTodosLosLotes() {
+	@Operation(summary = "Lotes con saldo disponible y estado derivado (VENCIDO/AGOTADO/VIGENTE). "
+			+ "Filtrable por proveedor con ?proveedorId=")
+	public List<LoteResponse> listarTodosLosLotes(@RequestParam(required = false) Long proveedorId) {
 		Map<Long, Item> items = indexarItems();
-		return consultarStock.listarTodosLosLotes().stream()
+		List<Lote> lotes = proveedorId != null
+				? consultarStock.listarLotesPorProveedor(proveedorId)
+				: consultarStock.listarTodosLosLotes();
+		return lotes.stream()
 				.map(lote -> LoteResponse.from(lote,
 						consultarStock.obtenerDisponibleDeLote(lote.getItemId(), lote.getId()),
 						nombreDe(items, lote.getItemId()), skuDe(items, lote.getItemId())))

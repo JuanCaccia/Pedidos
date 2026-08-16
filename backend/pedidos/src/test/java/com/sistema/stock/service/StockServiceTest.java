@@ -71,7 +71,7 @@ class StockServiceTest {
 
 	private Long itemConIngreso(String sku, BigDecimal cantidad) {
 		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand(sku, "Item " + sku, "UN", null, null, null));
-		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "LOTE-" + sku, null, cantidad, "Test"));
+		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "LOTE-" + sku, null, cantidad, "Test", null));
 		return item.getId();
 	}
 
@@ -156,7 +156,7 @@ class StockServiceTest {
 	void ajusteNegativoReduceDisponible() {
 		Long itemId = itemConIngreso("H", new BigDecimal("100.000"));
 		stockService.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(itemId,
-				new BigDecimal("-10.000"), "Diferencia fisica", adminActor()));
+				new BigDecimal("-10.000"), "Diferencia fisica", null, adminActor()));
 
 		assertEquals(0, new BigDecimal("90.000").compareTo(stockService.obtenerDisponible(itemId)));
 	}
@@ -165,23 +165,23 @@ class StockServiceTest {
 	void ajusteInvalidoOLlevaANegativoLanzaBusinessException() {
 		Long itemId = itemConIngreso("I", new BigDecimal("100.000"));
 		assertThrows(BusinessException.class, () -> stockService.ajustarInventario(
-				new AjustarInventario.AjusteInventarioCommand(itemId, BigDecimal.ZERO, "motivo", adminActor())));
+				new AjustarInventario.AjusteInventarioCommand(itemId, BigDecimal.ZERO, "motivo", null, adminActor())));
 		assertThrows(BusinessException.class, () -> stockService.ajustarInventario(
-				new AjustarInventario.AjusteInventarioCommand(itemId, new BigDecimal("-999.000"), "  ", adminActor())));
+				new AjustarInventario.AjusteInventarioCommand(itemId, new BigDecimal("-999.000"), "  ", null, adminActor())));
 	}
 
 	@Test
 	void ajusteGrandeConEncargadoLanzaBusinessException() {
 		Long itemId = itemConIngreso("I2", new BigDecimal("1000.000"));
 		assertThrows(BusinessException.class, () -> stockService.ajustarInventario(
-				new AjustarInventario.AjusteInventarioCommand(itemId, new BigDecimal("-200.000"), "grande", encargadoActor())));
+				new AjustarInventario.AjusteInventarioCommand(itemId, new BigDecimal("-200.000"), "grande", null, encargadoActor())));
 	}
 
 	@Test
 	void ajusteGrandeConAdminOk() {
 		Long itemId = itemConIngreso("I3", new BigDecimal("1000.000"));
 		stockService.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(itemId,
-				new BigDecimal("-200.000"), "grande", adminActor()));
+				new BigDecimal("-200.000"), "grande", null, adminActor()));
 		assertEquals(0, new BigDecimal("800.000").compareTo(stockService.obtenerDisponible(itemId)));
 	}
 
@@ -189,7 +189,7 @@ class StockServiceTest {
 	void ajusteChicoConEncargadoOk() {
 		Long itemId = itemConIngreso("I4", new BigDecimal("1000.000"));
 		stockService.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(itemId,
-				new BigDecimal("-10.000"), "chico", encargadoActor()));
+				new BigDecimal("-10.000"), "chico", null, encargadoActor()));
 		assertEquals(0, new BigDecimal("990.000").compareTo(stockService.obtenerDisponible(itemId)));
 	}
 
@@ -256,7 +256,7 @@ class StockServiceTest {
 		stockService.desactivarItem(itemId);
 
 		assertThrows(BusinessException.class, () -> stockService.ajustarInventario(
-				new AjustarInventario.AjusteInventarioCommand(itemId, new BigDecimal("-10.000"), "ajuste", adminActor())));
+				new AjustarInventario.AjusteInventarioCommand(itemId, new BigDecimal("-10.000"), "ajuste", null, adminActor())));
 	}
 
 	@Test
@@ -399,6 +399,42 @@ class StockServiceTest {
 	}
 
 	@Test
+	void ingresoConProveedorPersisteProveedorIdEnLote() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-PROV", "Prov", "UN", null, null, null));
+		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
+				item.getId(), "LOTE-PROV", null, new BigDecimal("100.000"), "Test", 42L));
+
+		Lote lote = loteRepository.findByItemId(item.getId()).get(0);
+		assertEquals(42L, lote.getProveedorId());
+	}
+
+	@Test
+	void ingresoSinProveedorDejaProveedorNullEnLote() {
+		Long itemId = itemConIngreso("SINPROV", new BigDecimal("100.000"));
+		Lote lote = loteRepository.findByItemId(itemId).get(0);
+		assertEquals(null, lote.getProveedorId());
+	}
+
+	@Test
+	void listarLotesPorProveedorDevuelveSoloLosDeEseProveedor() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-P2", "P2", "UN", null, null, null));
+		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
+				item.getId(), "LOTE-P2-A", null, new BigDecimal("10.000"), "t", 7L));
+		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
+				item.getId(), "LOTE-P2-B", null, new BigDecimal("5.000"), "t", 7L));
+		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
+				item.getId(), "LOTE-P2-C", null, new BigDecimal("3.000"), "t", 9L));
+
+		List<Lote> delProveedor7 = stockService.listarLotesPorProveedor(7L);
+		List<Lote> delProveedor9 = stockService.listarLotesPorProveedor(9L);
+
+		assertEquals(2, delProveedor7.size());
+		assertTrue(delProveedor7.stream().allMatch(l -> l.getProveedorId().equals(7L)));
+		assertEquals(1, delProveedor9.size());
+		assertTrue(delProveedor9.stream().allMatch(l -> l.getProveedorId().equals(9L)));
+	}
+
+	@Test
 	void estadoDerivadoVencidoAgotadoYVigente() {
 		LocalDate hoy = LocalDate.now();
 		// Vencido: fecha anterior a hoy, sin importar el saldo.
@@ -414,6 +450,123 @@ class StockServiceTest {
 		assertEquals("VIGENTE", LoteResponse.derivarEstado(null, new BigDecimal("4.000")));
 		// Vencido tiene prioridad sobre agotado.
 		assertEquals("VENCIDO", LoteResponse.derivarEstado(hoy.minusDays(1), BigDecimal.ZERO));
+	}
+
+	@Test
+	void ingresoCreaLoteVigente() {
+		Long itemId = itemConIngreso("VIG", new BigDecimal("100.000"));
+		Lote lote = loteRepository.findByItemId(itemId).get(0);
+		assertEquals(com.sistema.stock.model.LoteEstado.VIGENTE, lote.getEstado());
+	}
+
+	@Test
+	void egresoQueAgotaLoteLoDejaAgotado() {
+		LocalDate hoy = LocalDate.now();
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("AGOTA", "Agota", "UN", null, null, null));
+		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "L-AGOTA", hoy.plusDays(10),
+				new BigDecimal("100.000"), "Test", null));
+		Lote lote = loteRepository.findByItemId(item.getId()).get(0);
+
+		stockService.egresarPorLotes(item.getId(), 99L, new BigDecimal("100.000"));
+
+		assertEquals(com.sistema.stock.model.LoteEstado.AGOTADO, loteRepository.findById(lote.getId()).get().getEstado());
+	}
+
+	@Test
+	void egresoParcialNoAgotaLote() {
+		LocalDate hoy = LocalDate.now();
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("PARC", "Parc", "UN", null, null, null));
+		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "L-PARC", hoy.plusDays(10),
+				new BigDecimal("100.000"), "Test", null));
+		Lote lote = loteRepository.findByItemId(item.getId()).get(0);
+
+		stockService.egresarPorLotes(item.getId(), 99L, new BigDecimal("40.000"));
+
+		assertEquals(com.sistema.stock.model.LoteEstado.VIGENTE, loteRepository.findById(lote.getId()).get().getEstado());
+	}
+
+	@Test
+	void descartarLoteConSaldoRegistraMermaYSeteaDescartado() {
+		Long itemId = itemConIngreso("DESC", new BigDecimal("100.000"));
+		Lote lote = loteRepository.findByItemId(itemId).get(0);
+
+		stockService.descartar(lote.getId());
+
+		Lote persistido = loteRepository.findById(lote.getId()).get();
+		assertEquals(com.sistema.stock.model.LoteEstado.DESCARTADO, persistido.getEstado());
+		assertEquals(0, new BigDecimal("0.000").compareTo(stockService.obtenerDisponible(itemId)));
+		boolean mermaDeDescartes = movimientoRepository.findByItemIdOrderByFechaAsc(itemId).stream()
+				.anyMatch(m -> m.getTipo() == TipoMovimiento.MERMA
+						&& lote.getId().equals(m.getLoteId())
+						&& m.getCantidad().compareTo(new BigDecimal("100.000")) == 0);
+		assertTrue(mermaDeDescartes);
+	}
+
+	@Test
+	void descartarLoteYaDescartadoRechaza() {
+		Long itemId = itemConIngreso("DESC2", new BigDecimal("100.000"));
+		Lote lote = loteRepository.findByItemId(itemId).get(0);
+		stockService.descartar(lote.getId());
+
+		assertThrows(BusinessException.class, () -> stockService.descartar(lote.getId()));
+	}
+
+	@Test
+	void descartarLoteInexistenteLanzaNotFound() {
+		assertThrows(NotFoundException.class, () -> stockService.descartar(999L));
+	}
+
+	@Test
+	void descartarLoteSinSaldoSoloMarcaDescartadoSinMermaAdicional() {
+		LocalDate hoy = LocalDate.now();
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("DESC0", "D0", "UN", null, null, null));
+		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "L-DESC0", hoy.plusDays(10),
+				new BigDecimal("50.000"), "Test", null));
+		Lote lote = loteRepository.findByItemId(item.getId()).get(0);
+		stockService.egresarPorLotes(item.getId(), 99L, new BigDecimal("50.000"));
+		int mermasAntes = (int) movimientoRepository.findByItemIdOrderByFechaAsc(item.getId()).stream()
+				.filter(m -> m.getTipo() == TipoMovimiento.MERMA).count();
+
+		stockService.descartar(lote.getId());
+
+		assertEquals(com.sistema.stock.model.LoteEstado.DESCARTADO, loteRepository.findById(lote.getId()).get().getEstado());
+		long mermasDespues = movimientoRepository.findByItemIdOrderByFechaAsc(item.getId()).stream()
+				.filter(m -> m.getTipo() == TipoMovimiento.MERMA).count();
+		assertEquals(mermasAntes, mermasDespues);
+	}
+
+	@Test
+	void disponibleDeLoteContemplaAjustePorLote() {
+		Long itemId = itemConIngreso("AJL", new BigDecimal("100.000"));
+		Lote lote = loteRepository.findByItemId(itemId).get(0);
+		// AUD-010: un ajuste que lleva lote_id impacta el disponible del lote.
+		stockService.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(itemId,
+				new BigDecimal("-10.000"), "ajuste por lote", lote.getId(), adminActor()));
+
+		assertEquals(0, new BigDecimal("90.000").compareTo(stockService.obtenerDisponibleDeLote(itemId, lote.getId())));
+	}
+
+	@Test
+	void ajusteGlobalSinLoteNoImpactaDisponibleDeLote() {
+		Long itemId = itemConIngreso("AJL2", new BigDecimal("100.000"));
+		Lote lote = loteRepository.findByItemId(itemId).get(0);
+		stockService.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(itemId,
+				new BigDecimal("-10.000"), "ajuste global", null, adminActor()));
+
+		// Afecta el disponible del item pero no el del lote.
+		assertEquals(0, new BigDecimal("90.000").compareTo(stockService.obtenerDisponible(itemId)));
+		assertEquals(0, new BigDecimal("100.000").compareTo(stockService.obtenerDisponibleDeLote(itemId, lote.getId())));
+	}
+
+	@Test
+	void ajusteConLoteDeOtroItemLanzaBusinessException() {
+		Long itemId = itemConIngreso("AJX", new BigDecimal("100.000"));
+		Long otroItemId = itemConIngreso("AJX2", new BigDecimal("100.000"));
+		Lote loteDelItem = loteRepository.findByItemId(itemId).get(0);
+
+		assertThrows(BusinessException.class, () -> stockService.ajustarInventario(
+				new AjustarInventario.AjusteInventarioCommand(otroItemId, new BigDecimal("-5.000"),
+						"ajuste", loteDelItem.getId(), adminActor())));
 	}
 
 	@Test
@@ -588,6 +741,11 @@ class StockServiceTest {
 		@Override
 		public List<Lote> findByItemId(Long itemId) {
 			return datos.values().stream().filter(l -> l.getItemId().equals(itemId)).toList();
+		}
+
+		@Override
+		public List<Lote> findByProveedorId(Long proveedorId) {
+			return datos.values().stream().filter(l -> proveedorId.equals(l.getProveedorId())).toList();
 		}
 
 		@Override

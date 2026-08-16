@@ -1,8 +1,11 @@
 package com.sistema.stock.adapter.out.persistence;
 
 import com.sistema.common.model.BaseEntity;
+import com.sistema.stock.model.LoteEstado;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
@@ -15,6 +18,9 @@ public class LoteJpaEntity extends BaseEntity {
 	@Column(name = "item_id", nullable = false)
 	private Long itemId;
 
+	@Column(name = "proveedor_id")
+	private Long proveedorId;
+
 	@Column(name = "codigo_lote", nullable = false, length = 100)
 	private String codigoLote;
 
@@ -26,6 +32,10 @@ public class LoteJpaEntity extends BaseEntity {
 
 	@Column(name = "cantidad_ingresada", nullable = false, precision = 12, scale = 3)
 	private BigDecimal cantidadIngresada;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "estado", nullable = false, length = 20)
+	private LoteEstado estado = LoteEstado.VIGENTE;
 
 	protected LoteJpaEntity() {
 		// required by JPA
@@ -45,6 +55,14 @@ public class LoteJpaEntity extends BaseEntity {
 
 	public void setItemId(Long itemId) {
 		this.itemId = itemId;
+	}
+
+	public Long getProveedorId() {
+		return proveedorId;
+	}
+
+	public void setProveedorId(Long proveedorId) {
+		this.proveedorId = proveedorId;
 	}
 
 	public String getCodigoLote() {
@@ -77,5 +95,13 @@ public class LoteJpaEntity extends BaseEntity {
 
 	public void setCantidadIngresada(BigDecimal cantidadIngresada) {
 		this.cantidadIngresada = cantidadIngresada;
+	}
+
+	public LoteEstado getEstado() {
+		return estado;
+	}
+
+	public void setEstado(LoteEstado estado) {
+		this.estado = estado;
 	}
 }

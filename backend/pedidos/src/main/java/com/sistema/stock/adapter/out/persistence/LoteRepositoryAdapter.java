@@ -36,6 +36,11 @@ public class LoteRepositoryAdapter implements LoteRepository {
 	}
 
 	@Override
+	public List<Lote> findByProveedorId(Long proveedorId) {
+		return jpaRepository.findByProveedorId(proveedorId).stream().map(mapper::toDomain).toList();
+	}
+
+	@Override
 	public List<Lote> findByFechaVencimientoNotNullAndFechaVencimientoLessThanEqual(LocalDate fecha) {
 		return jpaRepository.findByFechaVencimientoNotNullAndFechaVencimientoLessThanEqual(fecha).stream()
 				.map(mapper::toDomain)

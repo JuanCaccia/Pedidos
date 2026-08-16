@@ -87,7 +87,7 @@ public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenC
 			linea.recibir(rl.cantidadRecibida());
 			String codigoLote = orden.getNumero() + "-" + (System.nanoTime() % 100000);
 			stockGateway.registrarIngreso(linea.getItemId(), codigoLote, rl.cantidadRecibida(),
-					"Recepción de OC " + orden.getNumero());
+					"Recepción de OC " + orden.getNumero(), orden.getProveedorId());
 		}
 		boolean completa = orden.getLineas().stream()
 				.allMatch(l -> l.getCantidadRecibida().compareTo(l.getCantidadPedida()) >= 0);

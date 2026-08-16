@@ -9,5 +9,7 @@ public interface LoteJpaRepository extends JpaRepository<LoteJpaEntity, Long> {
 
 	List<LoteJpaEntity> findByItemId(Long itemId);
 
+	List<LoteJpaEntity> findByProveedorId(Long proveedorId);
+
 	List<LoteJpaEntity> findByFechaVencimientoNotNullAndFechaVencimientoLessThanEqual(LocalDate fecha);
 }

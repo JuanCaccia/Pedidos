@@ -23,7 +23,7 @@ public class StockGatewayImpl implements StockGateway {
 	@Transactional
 	public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo) {
 		registrarIngreso.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
-				itemId, codigoLote, null, cantidad, motivo));
+				itemId, codigoLote, null, cantidad, motivo, null));
 	}
 
 	@Override

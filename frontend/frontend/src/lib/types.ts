@@ -112,12 +112,13 @@ export interface MovimientoStock {
 export interface Lote {
   id: number;
   itemId: number;
+  proveedorId: number | null;
   codigoLote: string;
   fechaIngreso: string;
   fechaVencimiento: string | null;
   cantidadIngresada: number;
   disponible: number;
-  estado: "VENCIDO" | "AGOTADO" | "VIGENTE";
+  estado: "VENCIDO" | "AGOTADO" | "VIGENTE" | "DESCARTADO";
   itemNombre: string | null;
   itemSku: string | null;
 }

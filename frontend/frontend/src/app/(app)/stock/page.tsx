@@ -46,12 +46,12 @@ function StockPageInner() {
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [lotesLoading, setLotesLoading] = useState(true);
   const [lotesError, setLotesError] = useState<string | null>(null);
-  const [lotesFilter, setLotesFilter] = useState<"todos" | "por-vencer" | "vencidos" | "agotados">(
-    () => {
-      if (searchParams.get("filtro") === "vencer") return "por-vencer";
-      return "todos";
-    }
-  );
+  const [lotesFilter, setLotesFilter] = useState<
+    "todos" | "por-vencer" | "vencidos" | "agotados" | "descartados"
+  >(() => {
+    if (searchParams.get("filtro") === "vencer") return "por-vencer";
+    return "todos";
+  });
   const lotesRef = useRef<HTMLElement | null>(null);
 
   const [selected, setSelected] = useState<ReporteStockItem | null>(null);
@@ -83,24 +83,21 @@ function StockPageInner() {
     loadStock();
   }, [loadStock]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadLotes = useCallback(async () => {
     setLotesLoading(true);
     setLotesError(null);
-    apiGet<Lote[]>("/api/stock/lotes")
-      .then((data) => {
-        if (!cancelled) setLotes(data);
-      })
-      .catch((err) => {
-        if (!cancelled) setLotesError(err instanceof Error ? err.message : "Error inesperado");
-      })
-      .finally(() => {
-        if (!cancelled) setLotesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      setLotes(await apiGet<Lote[]>("/api/stock/lotes"));
+    } catch (err) {
+      setLotesError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setLotesLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadLotes();
+  }, [loadLotes]);
 
   useEffect(() => {
     if (searchParams.get("tab") === "lotes" && lotesRef.current) {
@@ -176,6 +173,8 @@ function StockPageInner() {
           return l.estado === "VENCIDO";
         case "agotados":
           return l.estado === "AGOTADO";
+        case "descartados":
+          return l.estado === "DESCARTADO";
         case "por-vencer":
           return (
             l.fechaVencimiento !== null &&
@@ -204,6 +203,25 @@ function StockPageInner() {
       await exportarCSV("/api/reportes/stock/exportar.csv", "stock.csv");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado");
+    }
+  }
+
+  async function descartarLote(lote: Lote) {
+    if (submitting) return;
+    const confirmar =
+      lote.disponible > 0
+        ? `¿Descartar el lote ${lote.codigoLote}? Tiene ${formatNumber(lote.disponible)} en saldo y se registrará como merma.`
+        : `¿Descartar el lote ${lote.codigoLote}?`;
+    if (!window.confirm(confirmar)) return;
+    setSubmitting(true);
+    try {
+      await apiPost(`/api/stock/lotes/${lote.id}/descartar`);
+      showToast(`Lote ${lote.codigoLote} descartado.`);
+      await Promise.all([loadLotes(), loadStock()]);
+    } catch (err) {
+      setLotesError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -404,6 +422,7 @@ function StockPageInner() {
                 ["por-vencer", `Por vencer (${DIAS_POR_VENCER} días)`],
                 ["vencidos", "Vencidos"],
                 ["agotados", "Agotados"],
+                ["descartados", "Descartados"],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -437,12 +456,13 @@ function StockPageInner() {
                   <th className="px-5 py-2.5 font-medium">Vencimiento</th>
                   <th className="px-5 py-2.5 font-medium text-right">Disponible</th>
                   <th className="px-5 py-2.5 font-medium">Estado</th>
+                  <th className="px-5 py-2.5" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                 {filtrarLotes().length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-5 py-6 text-center text-neutral-500">
+                    <td colSpan={6} className="px-5 py-6 text-center text-neutral-500">
                       No hay lotes para este filtro
                     </td>
                   </tr>
@@ -453,7 +473,9 @@ function StockPageInner() {
                       ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
                       : lote.estado === "AGOTADO"
                         ? "bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200"
-                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+                        : lote.estado === "DESCARTADO"
+                          ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
                   return (
                     <tr key={lote.id}>
                       <td className="px-5 py-2.5 text-neutral-900 dark:text-neutral-100">
@@ -477,6 +499,20 @@ function StockPageInner() {
                         >
                           {lote.estado}
                         </span>
+                      </td>
+                      <td className="px-5 py-2.5 text-right">
+                        {canOperate &&
+                          lote.estado !== "DESCARTADO" &&
+                          lote.disponible > 0 && (
+                            <Button
+                              variant="secondary"
+                              className="px-2.5 py-1 text-xs"
+                              disabled={submitting}
+                              onClick={() => descartarLote(lote)}
+                            >
+                              Descartar
+                            </Button>
+                          )}
                       </td>
                     </tr>
                   );

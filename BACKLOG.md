@@ -271,32 +271,32 @@
 - **Estado:** ✅ **Resuelto (corte limpio)** — migración `V17__categoria.sql` (tabla `categoria` + backfill + `item.categoria_id` FK + **DROP de `item.categoria`** sin legado). Módulo hexagonal `categoria` (CRUD + activo), `Item` pasa a `categoriaId`/`categoriaNombre`, `listarCategorias` lee la tabla. Frontend: selector por `categoriaId` en item y pedidos (preservando P1.B), gestión de categorías en `/items`. Verificado por QA: 181 backend + 8 E2E + build verde.
 - **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
-### AUD-008 — Proveedor sin trazabilidad con Item/Lote (P2)
+### AUD-008 — Proveedor sin trazabilidad con Item/Lote (P2) ✅ RESUELTO
 
 - **Tipo:** deuda de modelado · **Prioridad:** P2
 - **Área:** Proveedor / compra / stock
 - **Evidencia:** `ProveedorJpaEntity:9-25` sin relación JPA con item/lote; `registrarIngreso` no pasa proveedor; `lote` no tiene `proveedor_id`.
 - **Impacto:** no se responde "items por proveedor" ni "origen de stock".
-- **AC:** `proveedor_id` en ingreso/lote + consulta items/lotes por proveedor.
-- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+- **Estado:** ✅ **Resuelto** — migración `V18__lote_proveedor.sql` (`lote.proveedor_id` FK nullable); la recepción de OC propaga el proveedor al ingreso/lote; `GET /stock/lotes?proveedorId=` consulta lotes por proveedor; `LoteResponse` expone `proveedorId`. `IngresoRequest` acepta `proveedorId`. Verificado por QA (198 backend + 8 E2E + build).
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
-### AUD-009 — Lote sin estado de ciclo de vida (P2)
+### AUD-009 — Lote sin estado de ciclo de vida (P2) ✅ RESUELTO
 
 - **Tipo:** deuda de modelado · **Prioridad:** P2
 - **Área:** stock / lotes
 - **Evidencia:** `lote` sin columna `estado`; `TipoMovimiento` sin DESCARTE/VENCIDO; merma no altera estado del lote.
 - **Impacto:** no se puede marcar/cerrar un lote; agotados/vencidos siguen listados.
-- **AC:** estado de lote (VIGENTE/AGOTADO/VENCIDO/DESCARTADO) + acción descartar.
-- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+- **Estado:** ✅ **Resuelto** — migración `V19__lote_estado.sql` (`lote.estado` enum VIGENTE/AGOTADO/VENCIDO/DESCARTADO); ingreso → VIGENTE, egreso que agota → AGOTADO, VENCIDO derivado por fecha (prioridad DESCARTADO > VENCIDO > AGOTADO > VIGENTE); `POST /stock/lotes/{id}/descartar` (registra merma por saldo + setea DESCARTADO); `egresarPorLotes` excluye DESCARTADOS. Frontend: badge/filtro "Descartados" + botón Descartar. Verificado por QA.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
-### AUD-010 — Ajuste de inventario no impacta disponible de lote (P2)
+### AUD-010 — Ajuste de inventario no impacta disponible de lote (P2) ✅ RESUELTO
 
 - **Tipo:** deuda de integridad · **Prioridad:** P2
 - **Área:** stock
 - **Evidencia:** `ajustarInventario` registra con `lote_id=null` y `disponibleDeLote` no contempla AJUSTE → incoherencia item vs lote; FEFO usa disponible de lote.
 - **Impacto:** descuentos declarados que el FEFO ignora.
-- **AC:** unificar cálculo de disponible de lote para contemplar ajustes.
-- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+- **Estado:** ✅ **Resuelto** — `disponibleDeLote` ahora contempla `AJUSTE_INVENTARIO` por lote; `AjusteInventarioCommand`/`AjusteRequest` ganan `loteId` opcional (si viene valida pertenencia `AJUSTE_LOTE_INCOMPATIBLE`; si null es ajuste global). Opción A (más coherente). Verificado por QA.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
 ### AUD-011 — Dashboard con links genéricos/mismatch (P2) ✅ RESUELTO
 

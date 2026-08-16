@@ -5,10 +5,11 @@ import com.sistema.stock.model.Lote;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public record IngresoResponse(Long loteId, Long itemId, String codigoLote, LocalDate fechaIngreso, BigDecimal cantidad) {
+public record IngresoResponse(Long loteId, Long itemId, Long proveedorId, String codigoLote, LocalDate fechaIngreso,
+		BigDecimal cantidad) {
 
 	public static IngresoResponse from(Lote lote) {
-		return new IngresoResponse(lote.getId(), lote.getItemId(), lote.getCodigoLote(),
+		return new IngresoResponse(lote.getId(), lote.getItemId(), lote.getProveedorId(), lote.getCodigoLote(),
 				lote.getFechaIngreso(), lote.getCantidadIngresada());
 	}
 }

@@ -33,6 +33,8 @@ public interface ConsultarStock {
 
 	List<Lote> listarLotes(Long itemId);
 
+	List<Lote> listarLotesPorProveedor(Long proveedorId);
+
 	List<Lote> listarLotesPorVencer(int dias);
 
 	List<Lote> listarTodosLosLotes();

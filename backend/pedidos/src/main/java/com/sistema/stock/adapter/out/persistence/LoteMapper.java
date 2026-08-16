@@ -8,6 +8,8 @@ public class LoteMapper {
 		Lote lote = new Lote(entity.getItemId(), entity.getCodigoLote(), entity.getFechaIngreso(),
 				entity.getFechaVencimiento(), entity.getCantidadIngresada());
 		lote.setId(entity.getId());
+		lote.setProveedorId(entity.getProveedorId());
+		lote.setEstado(entity.getEstado());
 		return lote;
 	}
 
@@ -17,6 +19,8 @@ public class LoteMapper {
 		if (lote.getId() != null) {
 			entity.setId(lote.getId());
 		}
+		entity.setProveedorId(lote.getProveedorId());
+		entity.setEstado(lote.getEstado());
 		return entity;
 	}
 }

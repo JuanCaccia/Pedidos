@@ -87,7 +87,7 @@ public class DataSeeder implements CommandLineRunner {
 		try {
 			Item item = gestionarItem.crearItem(new GestionarItem.CrearItemCommand(sku, nombre, unidad, null, null, null));
 			registrarIngreso.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), codigoLote, null,
-					new BigDecimal("100.000"), "Seed demo"));
+					new BigDecimal("100.000"), "Seed demo", null));
 			log.info("Seed item + ingreso creado: {}", sku);
 		} catch (RuntimeException e) {
 			log.debug("Seed item ya existente o no creado: {} ({})", sku, e.getMessage());

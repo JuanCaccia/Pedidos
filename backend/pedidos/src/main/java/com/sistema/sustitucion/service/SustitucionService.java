@@ -68,7 +68,7 @@ public class SustitucionService implements RegistrarSustitucion {
 		// que cierran una reserva).
 		ajustarInventario.ajustarInventario(new AjustarInventario.AjusteInventarioCommand(
 				command.itemSustitutoId(), command.cantidad().negate(),
-				"Sustitución en pedido " + command.pedidoId(), command.actor()));
+				"Sustitución en pedido " + command.pedidoId(), null, command.actor()));
 
 		Sustitucion sustitucion = sustitucionRepository.save(new Sustitucion(command.pedidoId(),
 				command.itemOriginalId(), command.itemSustitutoId(), command.cantidad(), diferenciaPrecio,

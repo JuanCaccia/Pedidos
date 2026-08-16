@@ -214,6 +214,92 @@ class PedidosIntegrationTest {
 	}
 
 	@Test
+	void descartarLoteConSaldoMarcaDescartadoYReduceStock() throws Exception {
+		String token = login();
+		// Creo un item + ingreso para obtener un lote con saldo.
+		String itemJson = mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"DESC-INT\",\"nombre\":\"Descartable\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		Integer itemId = JsonPath.read(itemJson, "$.id");
+
+		String ingreso = mockMvc.perform(post("/stock/ingresos")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"itemId\":" + itemId + ",\"cantidad\":100.000,\"motivo\":\"test\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		Integer loteId = JsonPath.read(ingreso, "$.loteId");
+
+		mockMvc.perform(post("/stock/lotes/" + loteId + "/descartar")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.estado").value("DESCARTADO"))
+				.andExpect(jsonPath("$.disponible").value(0.0));
+	}
+
+	@Test
+	void descartarLoteRechazaDescartadoYForbidenRepartidor() throws Exception {
+		String token = login();
+		String itemJson = mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"DESC-INT2\",\"nombre\":\"Descartable2\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		Integer itemId = JsonPath.read(itemJson, "$.id");
+		String ingreso = mockMvc.perform(post("/stock/ingresos")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"itemId\":" + itemId + ",\"cantidad\":50.000,\"motivo\":\"test\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		Integer loteId = JsonPath.read(ingreso, "$.loteId");
+
+		mockMvc.perform(post("/stock/lotes/" + loteId + "/descartar")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk());
+		mockMvc.perform(post("/stock/lotes/" + loteId + "/descartar")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isConflict());
+
+		String repartidorLogin = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"repartidor@pedidos.com\",\"password\":\"repartidor123\"}"))
+				.andReturn().getResponse().getContentAsString();
+		String repartidorToken = JsonPath.read(repartidorLogin, "$.token");
+		mockMvc.perform(post("/stock/lotes/" + loteId + "/descartar")
+						.header("Authorization", "Bearer " + repartidorToken))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void loteVencidoSeReportaComoVencido() throws Exception {
+		String token = login();
+		String itemJson = mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"VENC-INT\",\"nombre\":\"Vencible\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		Integer itemId = JsonPath.read(itemJson, "$.id");
+
+		String ingreso = mockMvc.perform(post("/stock/ingresos")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"itemId\":" + itemId + ",\"cantidad\":30.000,\"fechaVencimiento\":\"2020-01-01\",\"motivo\":\"test\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		Integer loteId = JsonPath.read(ingreso, "$.loteId");
+
+		mockMvc.perform(get("/stock/lotes").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[?(@.id == " + loteId + ")].estado", org.hamcrest.Matchers.contains("VENCIDO")));
+	}
+
+	@Test
 	void recursoInexistenteDevuelve404() throws Exception {
 		String login = mockMvc.perform(post("/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)

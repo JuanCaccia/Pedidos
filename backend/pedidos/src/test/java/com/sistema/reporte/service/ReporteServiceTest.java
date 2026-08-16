@@ -254,6 +254,11 @@ class ReporteServiceTest {
 		}
 
 		@Override
+		public List<com.sistema.stock.model.Lote> listarLotesPorProveedor(Long proveedorId) {
+			return List.of();
+		}
+
+		@Override
 		public List<com.sistema.stock.model.Lote> listarTodosLosLotes() {
 			return List.of();
 		}

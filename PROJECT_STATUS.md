@@ -54,7 +54,7 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 * Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (198 tests verdes).
 * Frontend Next.js 16.3 completo (login, dashboard, pedidos, stock, clientes/items/usuarios/
   proveedores, rutas+entregas, OC, cobranzas+caja, turno) — build OK.
-* Migraciones Flyway V1→V16 validadas.
+* Migraciones Flyway V1→V19 validadas.
 * Docker backend/frontend + compose local (Podman) funcionando.
 * CI (GitHub Actions) definido: backend test + frontend build + E2E Playwright (7 tests).
 * **Saneamiento Bloque P1.A (integridad de dominio) aplicado y verificado:**
@@ -113,10 +113,10 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 ## Architecture
 
 Backend hexagonal (controller → port/in → service → port/out → JPA) en Java 21 + Spring Boot
-4.1, Postgres 16 + Flyway (V1→V15), seguridad JWT + BCrypt. Módulos: usuario, cliente (zonas),
+4.1, Postgres 16 + Flyway (V1→V19), seguridad JWT + BCrypt. Módulos: usuario, cliente (zonas),
 stock (items/lotes/ledger/FEFO/mermas/ajustes/reservas), pedido (circuito PENDIENTE_*),
 ruta (despacho/asignación), compra (proveedores/OC), cobranza (remitos/cobranzas/cuenta),
-sustitucion, notificacion, reporte. Frontend Next.js 16.3 + Tailwind v4 + React 19, app router,
+sustitucion, notificacion, reporte, categoria. Frontend Next.js 16.3 + Tailwind v4 + React 19, app router,
 estado local (sin lib de estado global).
 
 ## Architectural Decisions
@@ -184,16 +184,18 @@ Commit:
 
 ## Next Milestone
 
-Continuación de Fase D: monitoreo avanzado (actuator/metrics), API versioning, más cobertura E2E,
-optimización de reportes, multi-depósito/empresa, integraciones externas (AFIP, pasarelas).
+**Hardening de Producción / Despliegue (Recomendado).** Saneamiento funcional y de dominio COMPLETO
+(todos los AUD P1/P2 resueltos). Próximo: resolver deuda técnica no bloqueante y preparar para
+producción real: orden determinista en cola de confirmación (STR-004), endpoints de limpieza/reset
+para tests E2E (STR-005), limpieza de datos QA (STR-003), y opcional monitoreo avanzado
+(`/actuator/metrics`) / API versioning.
 
 ## Recommended Next Action
 
-1. Refinamiento UX/UI o hardening de producción/Docker/CI-CD (ver opciones del handoff de cierre).
+1. **Hardening de Producción:** resolver STR-004 (orden cola confirmación) y STR-005 (reset de datos para E2E), revisar `JWT_SECRET` vía secretos reales, healthchecks en Docker.
 2. Ordenar la cola de confirmación del backend (STR-004) — mejora de determinismo.
-3. Monitoreo avanzado: exponer `/actuator/metrics` y métricas de negocio.
-4. Endpoints de limpieza/reset para tests E2E (STR-005).
-5. Limpiar datos de QA en BD local (STR-003).
+3. Endpoints de limpieza/reset para tests E2E (STR-005).
+4. Limpiar datos de QA en BD local (STR-003).
 
 ## Notes for Future Agents
 

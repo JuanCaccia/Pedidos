@@ -204,17 +204,15 @@
 
 > Hallazgos de la auditoría crítica delegada a sub-agentes de exploración. Todo verificado contra código (ruta:línea). Sin fixes aún.
 
-### AUD-001 — Soft delete (`activo`) sin semántica real (P1) ✅ RESUELTO (backend) / pendiente frontend
+### AUD-001 — Soft delete (`activo`) sin semántica real (P1) ✅ RESUELTO
 
 - **Tipo:** bug de negocio · **Prioridad:** P1
 - **Área:** Item / Cliente / Proveedor
 - **Evidencia:** `PedidoService.crearPedido:88-90` valida solo `existeItem` (no `activo`); `ClienteGatewayImpl:19-21` no chequea `activo`; `OrdenCompraService:51-53` y `StockService:321-324` tampoco.
 - **Problema:** items/clientes/proveedores desactivados se siguen usando en pedidos nuevos, OC, reservas y movimientos. Quedan en "limbo".
 - **Impacto:** se venden/compran items dados de baja.
-- **Estado:** ✅ **Backend resuelto** — `PedidoService.crearPedido` rechaza item/cliente inactivo (`ITEM_INACTIVO`/`CLIENTE_INACTIVO`); `OrdenCompraService` rechaza item/proveedor inactivo; `StockService.registrarMerma`/`ajustarInventario` y `StockGatewayImpl.reservar` validan item activo; capacidad `?activos=true` en items/clientes. Verificado por QA: 163 backend + 7 E2E verdes.
-- **Pendiente frontend (Bloque P1.B):** los comboboxes de creación (`pedidos/page.tsx:1018,1183`, `cobranzas/page.tsx:328,701`) aún llaman `/api/items?q=` y `/api/clientes?q=` SIN `activos=true` → siguen mostrando inactivos. Deben enviar `activos=true`.
-- **AC (restante):** frontend envía `activos=true` en comboboxes de creación.
-- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** parcial (backend listo, frontend pendiente)
+- **Estado:** ✅ **Resuelto (backend + frontend)** — backend rechaza item/cliente/proveedor inactivo en escritura (P1.A) y expone `?activos=true`; frontend envía `activos=true` en los comboboxes de creación (`pedidos/page.tsx:1021,1118,1187,1292`, `cobranzas/page.tsx:328`, `ordenes-compra/page.tsx:573`) resuelto en P2.A. Verificado por QA.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
 ### AUD-002 — FEFO no excluye lotes vencidos (P1) ✅ RESUELTO
 

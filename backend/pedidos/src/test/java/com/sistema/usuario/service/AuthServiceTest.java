@@ -8,6 +8,7 @@ import com.sistema.usuario.port.in.ConsultarUsuario;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.mock.env.MockEnvironment;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,7 +31,7 @@ class AuthServiceTest {
 		BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 		usuario = new Usuario("Admin", "admin@test.com", encoder.encode("admin123"), Set.of(Rol.ADMINISTRATIVO));
 		usuario.setId(1L);
-		JwtService jwtService = new JwtService(SECRET, 3600000L);
+		JwtService jwtService = new JwtService(SECRET, 3600000L, new MockEnvironment());
 		ConsultarUsuario consultar = new ConsultarUsuario() {
 			@Override
 			public Optional<Usuario> buscarPorId(Long id) {

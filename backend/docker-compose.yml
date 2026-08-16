@@ -30,6 +30,12 @@ services:
       JWT_SECRET: ${JWT_SECRET:-cambiar-en-produccion-esta-clave-secreta-jwt-2026}
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
     depends_on:
       db:
         condition: service_healthy
@@ -43,8 +49,15 @@ services:
       API_PROXY_TARGET: http://backend:8080
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/login"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

@@ -14,13 +14,13 @@
 ./mvnw test
 ```
 
-Runs from `backend/pedidos`. This executes **198 tests across 17 files**.
+Runs from `backend/pedidos`. This executes **204 tests across 19 files**.
 
 ### Unit tests (Mockito, per service)
 
 | Test class | Tests | Covers |
 |---|---|---|
-| `PedidoServiceTest` | 32 | Order state machine, stock reservation, consolidation, dispatch, delivery |
+| `PedidoServiceTest` | 33 | Order state machine, stock reservation, consolidation, dispatch, delivery, deterministic confirmation queue ordering |
 | `StockServiceTest` | 50 | Ingresos, mermas, ajustes, lotes, FEFO, reservations, discard |
 | `RutaServiceTest` | 15 | Route planning, capacity, start/close |
 | `OrdenCompraServiceTest` | 13 | OC lifecycle, partial/full receipt |
@@ -33,6 +33,7 @@ Runs from `backend/pedidos`. This executes **198 tests across 17 files**.
 | `ReporteServiceTest` | 5 | Stock/sales/routes/cash reports |
 | `SustitucionServiceTest` | 4 | Substitution, price difference |
 | `AuthServiceTest` | 4 | Login, token generation |
+| `JwtServiceTest` | 4 | JWT signing, prod `JWT_SECRET` fail-fast (null/blank/default) |
 | `ZonaServiceTest` | 3 | Zone CRUD |
 | `RemitoServiceTest` | 1 | Remit generation |
 
@@ -41,6 +42,7 @@ Runs from `backend/pedidos`. This executes **198 tests across 17 files**.
 | Test class | Tests | Covers |
 |---|---|---|
 | `PedidosIntegrationTest` | 22 | JWT login, full order flow, role permissions, inactive item, lot discard, expired lot, actuator info requires admin, category requires deposit |
+| `TestResetNoExisteEnProdTest` | 1 | `/test/reset` NOT registered in `prod` profile |
 | `PedidosApplicationTests` | 1 | Spring context load |
 
 ---
@@ -54,6 +56,8 @@ npm run test:e2e
 ```
 
 `playwright.config.ts` uses `baseURL http://localhost:3000` and `1 worker`.
+A `globalSetup` (`e2e/global-setup.ts`) calls `POST /api/test/reset` before the
+suite so the database starts clean and reproducible each run.
 Credentials come from `e2e/helpers.ts` (ADMIN and REPARTIDOR).
 
 **8 tests across 6 spec files:**

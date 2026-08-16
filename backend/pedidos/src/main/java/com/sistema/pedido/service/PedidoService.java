@@ -415,13 +415,13 @@ public class PedidoService implements CrearPedido, ConfirmarPedido, GestionarEnt
 		} else {
 			todos = pedidoRepository.findAll();
 		}
-		// Cola de preparación/despacho: los express primero (más recientes primero dentro del mismo grupo).
-		if (estado != null && (estado == EstadoPedido.PENDIENTE_STOCK
-				|| estado == EstadoPedido.PENDIENTE_PREPARACION || estado == EstadoPedido.PENDIENTE_ENTREGA)) {
+		// Cola determinista por estado: express primero, más recientes primero, desempate estable por id.
+		if (estado != null) {
 			todos = todos.stream()
 					.sorted(java.util.Comparator
 							.comparing(Pedido::isExpress).reversed()
-							.thenComparing(java.util.Comparator.nullsLast(java.util.Comparator.comparing(Pedido::getFechaCreacion))))
+							.thenComparing(java.util.Comparator.nullsLast(java.util.Comparator.comparing(Pedido::getFechaCreacion).reversed()))
+							.thenComparing(Pedido::getId))
 					.toList();
 		}
 		return paginar(todos, page, size);

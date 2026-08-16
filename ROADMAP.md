@@ -2,7 +2,7 @@
 
 > Priorización acordada (2026-08): **Fase A completa** ✅ · **Fase B completa** ✅ ·
 > **Fase C completa** ✅ · **Fase D COMPLETA** ✅ (cimientos técnicos, resiliencia y QA) ·
-> **Saneamiento Funcional (P1/P2) COMPLETO** ✅.
+> **Saneamiento Funcional (P1/P2) COMPLETO** ✅ · **Hardening de Producción COMPLETO** ✅.
 
 ## Estado actual
 
@@ -11,7 +11,7 @@
   `pedido` (circuito con `PENDIENTE_STOCK`, pedido hijo), `ruta` (despacho +
   asignación), `compra` (proveedores + OC con recepción → stock), `cobranza`
   (remitos + cobranzas + cuenta de cliente), `reporte` (stock/ventas/rutas/caja),
-  `sustitucion`, `notificacion`, seguridad JWT + BCrypt, auditoría, springdoc, actuator (health/info). **198 tests**.
+  `sustitucion`, `notificacion`, seguridad JWT + BCrypt, auditoría, springdoc, actuator (health/info/metrics). **204 tests**.
 - **Frontend** completo: login, Dashboard (alertas: stock bajo, pendientes,
   re-agendados, lotes por vencer), Pedidos (cliente+zona, acciones por rol),
   Stock (operativo), Clientes/Items/Usuarios/Proveedores (ABMC), Rutas +
@@ -19,7 +19,7 @@
   auditado con Impeccable.
 - Migraciones Flyway V1→V19 · Dockerfile backend/frontend + compose · CI en
   GitHub Actions · App local en containers Podman (`:8080/api` + `:3000`).
-- Observabilidad base (D3): `/actuator/health` público (con liveness/readiness y detalles DB por rol), `/actuator/info` solo `ADMINISTRATIVO`.
+- Observabilidad base (D3): `/actuator/health` público (con liveness/readiness y detalles DB por rol), `/actuator/info` solo `ADMINISTRATIVO`. — ✅ Hardening: `/actuator/metrics` y `/actuator/prometheus` (micrometer) también solo `ADMINISTRATIVO`.
 
 ---
 
@@ -98,3 +98,23 @@ multi-empresa, integraciones externas (AFIP, pasarelas de pago).
 - P2.A catálogo, accesos y navegabilidad: categorías (corte limpio V17), búsqueda
   server-side, navegación por estados.
 - P2.B modelado de stock: estado de lote (V18-V19), ajustes firmados, disponibleDeLote.
+
+---
+
+## Hardening de Producción ✅ COMPLETO
+
+Deuda técnica no bloqueante resuelta + preparación para producción real (2026-08-16).
+
+### H1 — Determinismo y reset E2E ✅ COMPLETA
+- STR-004: `listarPaginado` ordena toda consulta (`express DESC, fechaCreacion DESC, id ASC`, null-safe).
+- STR-005: `POST /api/test/reset` (dev/test, `TRUNCATE CASCADE` + reseed) + `globalSetup` en Playwright; no existe en prod.
+
+### H2 — Validación, secretos y observabilidad ✅ COMPLETA
+- STR-006: 4 DTOs a `List<@Valid X>` → cero HV000271.
+- JWT_SECRET fail-fast en `prod` (arranque falla si falta/usar default).
+- Métricas Prometheus: `/actuator/metrics` + `/actuator/prometheus` (ADMINISTRATIVO).
+
+### H3 — Docker healthchecks ✅ COMPLETA
+- HEALTHCHECK backend (→ `/api/actuator/health`) y frontend (→ `/login`); compose con healthchecks y `frontend.depends_on.backend.condition: service_healthy`.
+
+Suite: **204 tests backend (19 archivos)** + **8 E2E (6 specs)** + build frontend verde.

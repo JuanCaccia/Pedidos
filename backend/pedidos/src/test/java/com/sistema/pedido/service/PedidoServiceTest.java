@@ -188,6 +188,33 @@ class PedidoServiceTest {
 	}
 
 	@Test
+	void listarColaConfirmacionOrdenaDeterminista() {
+		Pedido p1 = crearPedido(10L, new BigDecimal("1.000"));
+		Pedido p2 = crearPedido(10L, new BigDecimal("1.000"));
+		Pedido p3 = crearPedido(10L, new BigDecimal("1.000"));
+		LocalDateTime mismoTimestamp = LocalDateTime.of(2024, 1, 1, 10, 0);
+		for (Pedido p : List.of(p1, p2, p3)) {
+			p.setEstado(EstadoPedido.PENDIENTE_CONFIRMACION);
+			p.setFechaCreacion(mismoTimestamp);
+			pedidoRepository.save(p);
+		}
+		Pedido express = pedidoService.crearPedido(new CrearPedidoCommand(1L, 1L, null, null, true,
+				List.of(new LineaPedidoCommand(11L, new BigDecimal("1"), new BigDecimal("5.00")))));
+		express.setEstado(EstadoPedido.PENDIENTE_CONFIRMACION);
+		express.setFechaCreacion(mismoTimestamp);
+		pedidoRepository.save(express);
+
+		com.sistema.common.model.PageResponse<Pedido> cola = pedidoService.listarPaginado(
+				EstadoPedido.PENDIENTE_CONFIRMACION, null, null, 0, 20);
+
+		assertEquals(4, cola.content().size());
+		assertTrue(cola.content().get(0).isExpress(), "El express debe aparecer primero en la cola de confirmación");
+		List<Long> ids = cola.content().stream().map(Pedido::getId).toList();
+		assertEquals(List.of(express.getId(), p1.getId(), p2.getId(), p3.getId()), ids,
+				"Con mismo timestamp y mismo express el desempate es por id ASC");
+	}
+
+	@Test
 	void confirmarConStockSuficienteReservaTodo() {
 		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
 		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));

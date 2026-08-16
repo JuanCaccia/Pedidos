@@ -41,6 +41,7 @@ Payload:  { "sub": "<usuarioId>", "email": "...", "roles": [...], "exp": <epoch-
 | Password encoder | BCrypt |
 | JWT algorithm | HMAC-SHA |
 | JWT expiration | 8 h (default) |
+| JWT_SECRET (prod) | mandatory; app fails to start if missing/default (fail-fast) |
 
 ---
 
@@ -71,6 +72,7 @@ user. Paths not listed fall back to **authenticated**.
 | `/proveedores`, `/ordenes-compra/**` | `ENCARGADO_DEPOSITO`, `ADMIN` |
 | `POST /sustituciones` | `REPARTIDOR`, `ADMIN` |
 | `/actuator/**` | `ADMIN` |
+| `POST /test/reset` | Public (`permitAll`) — **active ONLY in `dev`/`test`; NOT registered in `prod`** |
 | Everything else | authenticated |
 
 > Note: users may hold multiple roles. The demo `admin@pedidos.com` carries all
@@ -93,8 +95,18 @@ Both return a JSON error body (see [03-api.md](./03-api.md)).
 
 - `/actuator/health` (with liveness/readiness probes) is **public**; health
   detail is shown only when authorized (`show-details: when-authorized`).
-- `/actuator/info` (app metadata) and the rest of `/actuator/**` require
+- `/actuator/info` (app metadata), `/actuator/metrics` and
+  `/actuator/prometheus` (observability), and the rest of `/actuator/**` require
   `ADMINISTRATIVO`.
+
+---
+
+## Production configuration notes
+
+- **`JWT_SECRET` is mandatory in production.** In the `prod` profile the
+  application **fails to start** (`IllegalStateException`) if `app.jwt.secret` is
+  null/blank **or** equals the insecure default (`cambiar-en-produccion...`).
+  Set a strong secret (≥ 256 bits for HS256) via a real secret manager.
 
 ---
 

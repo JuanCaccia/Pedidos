@@ -5,5 +5,5 @@ import jakarta.validation.constraints.NotEmpty;
 
 import java.util.List;
 
-public record RecepcionRequest(@NotEmpty @Valid List<RecepcionLineaRequest> lineas) {
+public record RecepcionRequest(@NotEmpty List<@Valid RecepcionLineaRequest> lineas) {
 }

@@ -38,6 +38,10 @@ public class DataSeeder implements CommandLineRunner {
 
 	@Override
 	public void run(String... args) {
+		seed();
+	}
+
+	public void seed() {
 		seedUsuario("Admin Sistema", "admin@pedidos.com", "admin123",
 				EnumSet.of(Rol.ADMINISTRATIVO, Rol.VENDEDOR, Rol.ENCARGADO_DEPOSITO, Rol.REPARTIDOR));
 		seedUsuario("Repartidor Demo", "repartidor@pedidos.com", "repartidor123", EnumSet.of(Rol.REPARTIDOR));

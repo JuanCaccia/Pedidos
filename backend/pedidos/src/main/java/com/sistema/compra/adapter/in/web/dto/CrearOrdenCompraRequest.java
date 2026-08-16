@@ -7,5 +7,5 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public record CrearOrdenCompraRequest(@NotNull Long proveedorId, String observaciones,
-		@NotEmpty @Valid List<LineaOrdenRequest> lineas) {
+		@NotEmpty List<@Valid LineaOrdenRequest> lineas) {
 }

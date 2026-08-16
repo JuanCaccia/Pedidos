@@ -167,8 +167,19 @@ role-based; see [05-seguridad.md](./05-seguridad.md) for the full matrix.
 | GET | `/health` | DB connectivity probe (UP/DOWN, 503 on DB down) | Public |
 | GET | `/actuator/health` | Actuator health (liveness/readiness, DB details per role) | Public |
 | GET | `/actuator/info` | App metadata (`info.app`) | ADMINISTRATIVO |
+| GET | `/actuator/metrics` | Actuator metrics | ADMINISTRATIVO |
+| GET | `/actuator/prometheus` | Prometheus scrape endpoint (via `micrometer-registry-prometheus`) | ADMINISTRATIVO |
 | GET | `/actuator/**` | Other actuator endpoints | ADMINISTRATIVO |
 | — | `/v3/api-docs/**`, `/swagger-ui/**` | OpenAPI/Swagger UI | Public |
+
+### Test / developer (not part of the production matrix)
+
+> **Restricted to `dev`/`test` profiles only — does NOT exist in `prod`.** Used by
+> the Playwright E2E suite to guarantee a clean, reproducible database per run.
+
+| Method | Path | Purpose | Role |
+|---|---|---|---|
+| POST | `/test/reset` | TRUNCATE CASCADE over 20 tables + reseed via `DataSeeder.seed()` | Public (`permitAll`, dev/test only) |
 
 ---
 

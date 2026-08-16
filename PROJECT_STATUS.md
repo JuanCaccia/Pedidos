@@ -1,15 +1,17 @@
 # Project Status — Sistema de Pedidos, Stock y Ventas
 
-> **Fecha:** 2026-08-15. **Autor:** cierre formal de milestone + cierre de Fase D (D1-D4).
+> **Fecha:** 2026-08-16. **Autor:** cierre formal de milestone + cierre de Fase D (D1-D4) + cierre de Hardening de Producción.
 > Este documento describe el estado **verificado real** del proyecto, no aspiraciones.
 
 ## Current Milestone
+
+**Hardening de Producción — COMPLETO y VERIFICADO**
 
 **Fase D — Cimientos técnicos, resiliencia y QA (D1, D2, D3, D4) — COMPLETA y VERIFICADA**
 
 ## Status
 
-**COMPLETA / VERIFICADA — Backend 198 tests + E2E Playwright 8 tests en verde; Fase D cerrada; Bloques P1.A, P1.B, P2.A y P2.B de saneamiento aplicados y verificados.**
+**COMPLETA / VERIFICADA — Backend 204 tests + E2E Playwright 8 tests en verde; Hardening de Producción cerrado; Fase D cerrada; Bloques P1.A, P1.B, P2.A y P2.B de saneamiento aplicados y verificados.**
 
 ## Milestone Objective
 
@@ -23,12 +25,20 @@ TTL de reservas, consolidación, export CSV).
 
 La mayoría de los flujos centrales **funcionan y son consistentes** entre backend y frontend
 (ciclo de pedido, consolidación, OC/recepción, cobranzas, faltantes+notificaciones, CSV,
-TTL config). Backend: **198 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
+TTL config). Backend: **204 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
 Los dos bloqueantes P1 de C8 (BUG-002 autorización, BUG-003 sustitución con diferencia
 negativa) fueron **resueltos y verificados en vivo**. Persisten como P1: BUG-004 (cierre de
 jornada con EN_VIAJE colgados) y BUG-005 (decisión de alcance "pedido express"). Además
 existe el riesgo estructural STR-001: el frontend completo está sin versionar de forma
 reproducible (gitlink a commit vacío, sin submódulo, sin remote).
+
+**Hardening de Producción cerrado y verificado (2026-08-16):**
+- STR-004: orden determinista en TODA consulta (`express DESC, fechaCreacion DESC, id ASC`, null-safe).
+- STR-005: `POST /api/test/reset` (dev/test) + `globalSetup` en Playwright para DB limpia/reproducible; NO existe en prod.
+- STR-006: 4 DTOs migrados a `List<@Valid X>` → cero warnings HV000271.
+- JWT_SECRET estricto en prod: arranque FALLA (`IllegalStateException`) si falta o usa el default inseguro.
+- Métricas: `/actuator/metrics` + `/actuator/prometheus` (micrometer) protegidos por `ADMINISTRATIVO`.
+- Docker: HEALTHCHECK en backend (→ `/api/actuator/health`) y frontend (→ `/login`); compose con healthchecks + `service_healthy`.
 
 ## Feature Status
 
@@ -51,12 +61,12 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 
 ## Completed
 
-* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (198 tests verdes).
+* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (204 tests verdes).
 * Frontend Next.js 16.3 completo (login, dashboard, pedidos, stock, clientes/items/usuarios/
   proveedores, rutas+entregas, OC, cobranzas+caja, turno) — build OK.
 * Migraciones Flyway V1→V19 validadas.
 * Docker backend/frontend + compose local (Podman) funcionando.
-* CI (GitHub Actions) definido: backend test + frontend build + E2E Playwright (7 tests).
+* CI (GitHub Actions) definido: backend test + frontend build + E2E Playwright (8 tests).
 * **Saneamiento Bloque P1.A (integridad de dominio) aplicado y verificado:**
   - Soft delete con semántica real: item/cliente/proveedor inactivo rechazado en pedidos, OC, reservas, mermas y ajustes; capacidad `?activos=true` en comboboxes.
   - FEFO seguro: `egresarPorLotes` excluye lotes vencidos (`fechaVencimiento < hoy`).
@@ -74,6 +84,13 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
   - AUD-008: trazabilidad de proveedor en lote (`V18__lote_proveedor.sql`), recepción de OC asocia proveedor, `GET /stock/lotes?proveedorId=`.
   - AUD-009: estado de lote (`V19__lote_estado.sql` VIGENTE/AGOTADO/VENCIDO/DESCARTADO) + `POST /stock/lotes/{id}/descartar`; FEFO excluye descartados.
   - AUD-010: `disponibleDeLote` contempla `AJUSTE_INVENTARIO` por lote (ajuste con `loteId` opcional).
+- **Hardening de Producción aplicado y verificado (2026-08-16):**
+  - STR-004: `listarPaginado` ordena toda consulta deterministamente (`express DESC, fechaCreacion DESC, id ASC`, null-safe); test `listarColaConfirmacionOrdenaDeterminista`.
+  - STR-005: `POST /api/test/reset` (dev/test) con `TRUNCATE CASCADE` de 20 tablas + reseed; `globalSetup` en Playwright; no existe en prod (test `TestResetNoExisteEnProdTest`).
+  - STR-006: 4 DTOs a `List<@Valid X>` (CrearPedidoRequest, EntregaRequest, RecepcionRequest, CrearOrdenCompraRequest) → cero HV000271.
+  - JWT_SECRET fail-fast en prod (`IllegalStateException` si null/blank/default); `JwtServiceTest` (4 casos).
+  - Métricas Prometheus: `micrometer-registry-prometheus` + `/actuator/metrics` y `/actuator/prometheus` (ADMINISTRATIVO).
+  - Docker HEALTHCHECK (backend → `/api/actuator/health`, frontend → `/login`) + compose con healthchecks y `service_healthy`.
 
 ## Partially Completed
 
@@ -95,20 +112,26 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 ## Known Limitations
 
 * Sin soporte offline.
-* Sin monitoreo/actuator de producción (Fase D). — ✅ D3: actuator base (health/info) implementado; faltan métricas avanzadas/actuator/metrics.
-* Sin tests e2e (Playwright) (Fase D). — ✅ D4: Playwright E2E implementado (7 tests: login, repartidor/turno, consolidación, sustitución, pedido express) + job CI.
+* Sin monitoreo/actuator de producción (Fase D). — ✅ D3: actuator base (health/info) implementado; — ✅ Hardening: `/actuator/metrics` y `/actuator/prometheus` disponibles (protegidos por ADMINISTRATIVO).
+* Sin tests e2e (Playwright) (Fase D). — ✅ D4: Playwright E2E implementado (7 tests: login, repartidor/turno, consolidación, sustitución, pedido express) + job CI; — ✅ Hardening: 8 tests (globalSetup con reset de DB).
 * Sin tests del frontend (ningún test unit/e2e FE).
-* JWT_SECRET con default inseguro en dev.
+* JWT_SECRET con default inseguro en dev. — ✅ Hardening: fail-fast en prod (arranque falla si falta/usa default).
 * Consultas de reportes sin optimizar para gran volumen (Fase D).
 
 ## Technical Debt
 
-* `GlobalExceptionHandler` no mapea 404/405 → 500 (QA-01).
-* Validación anidada inconsistente entre requests (`@Valid` faltante en varios).
-* Frontend usa `size=500` sin paginar en turno y alertas (riesgo a gran escala).
-* Frontend completo **sin versionar** de forma reproducible (STR-001).
+* ~~STR-004 (orden cola confirmación)~~ → **RESUELTO** (orden determinista global).
+* ~~STR-005 (reset de datos E2E)~~ → **RESUELTO** (`POST /api/test/reset`, dev/test).
+* ~~STR-006 (HV000271)~~ → **RESUELTO** (DTOs a `List<@Valid X>`, cero warnings).
+* ~~JWT_SECRET default inseguro~~ → **RESUELTO** (fail-fast en prod).
+* ~~Sin métricas/actuator de observabilidad~~ → **RESUELTO** (`/actuator/metrics`, `/actuator/prometheus`).
+* ~~Sin healthchecks en Docker~~ → **RESUELTO** (HEALTHCHECK + compose `service_healthy`).
+* `GlobalExceptionHandler` no mapea 404/405 → 500 (QA-01). — ✅ resuelto (404/405/415 mapeados).
+* Validación anidada inconsistente entre requests (`@Valid` faltante en varios). — ✅ resuelto (STR-006).
+* Frontend usa `size=500` sin paginar en turno y alertas (riesgo a gran escala) — QA-08/QA-10.
+* Frontend completo **sin versionar** de forma reproducible (STR-001) — P1, pendiente.
 * Sin tests frontend.
-* ROADMAP.md desactualizado (109→132 tests, V1→V11→V15, C8 no reflejado).
+* ROADMAP.md desactualizado (109→132 tests, V1→V11→V15, C8 no reflejado). — ✅ Hardening: ROADMAP.md actualizado a 204/8 y hitos cerrados.
 
 ## Architecture
 
@@ -152,8 +175,8 @@ completed: yes (subagente + verificación manual de bloqueantes)
 result: 2 bloqueantes (BUG-002, BUG-003) RESUELTOS y verificados + 13 hallazgos (QA-01..13) + STR
 
 Automated tests:
-- Backend: **198 tests, 0 fallos** (surefire).
-- Frontend: **sin tests unitarios; E2E con Playwright: 7 tests verdes, estable como gate de CI** (`npm run test:e2e`).
+- Backend: **204 tests, 0 fallos** (surefire) en 19 archivos.
+- Frontend: **sin tests unitarios; E2E con Playwright: 8 tests verdes, estable como gate de CI** (`npm run test:e2e`); `globalSetup` resetea la DB (`POST /api/test/reset`) para corridas reproducibles.
 
 End-to-end verification:
 - Core flows vía API confirmados (login, pedido, consolidación, OC, cobranza, faltante,
@@ -170,6 +193,7 @@ Critical:
 
 Important:
 * QA-01, QA-05, QA-09, QA-10 (P2) · QA-04, QA-13 — resueltos
+* ~~STR-004~~ · ~~STR-005~~ · ~~STR-006~~ — resueltos (Hardening)
 
 Future:
 * QA-08, QA-11, QA-12 (P3) · STR-002 (docs) · STR-003 (limpieza datos QA)
@@ -184,18 +208,20 @@ Commit:
 
 ## Next Milestone
 
-**Hardening de Producción / Despliegue (Recomendado).** Saneamiento funcional y de dominio COMPLETO
-(todos los AUD P1/P2 resueltos). Próximo: resolver deuda técnica no bloqueante y preparar para
-producción real: orden determinista en cola de confirmación (STR-004), endpoints de limpieza/reset
-para tests E2E (STR-005), limpieza de datos QA (STR-003), y opcional monitoreo avanzado
-(`/actuator/metrics`) / API versioning.
+**Hardening de Producción COMPLETO** (STR-004/005/006, JWT_SECRET estricto, métricas Prometheus,
+HEALTHCHECKs en Docker). Próximo: **Despliegue / Entrega a producción**. Saneamiento funcional y de
+dominio COMPLETO. Pendiente de resolución para producción real: STR-001 (frontend sin versionar de
+forma reproducible), limpieza de datos QA (STR-003), decidir alcance de BUG-005 (pedido express),
+y optativo API versioning.
 
 ## Recommended Next Action
 
-1. **Hardening de Producción:** resolver STR-004 (orden cola confirmación) y STR-005 (reset de datos para E2E), revisar `JWT_SECRET` vía secretos reales, healthchecks en Docker.
-2. Ordenar la cola de confirmación del backend (STR-004) — mejora de determinismo.
-3. Endpoints de limpieza/reset para tests E2E (STR-005).
-4. Limpiar datos de QA en BD local (STR-003).
+1. **Resolver STR-001 (P1):** versionar el frontend de forma reproducible (submódulo con remote o
+   directorio integrado + commit del trabajo real) antes del despliegue.
+2. Desplegar a un entorno de producción con `JWT_SECRET` real (el arranque en `prod` falla si falta)
+   y validar healthchecks de Docker (`/api/actuator/health`, `/login`).
+3. Confirmar limpieza de datos de QA en BD local (STR-003).
+4. Decidir el alcance de BUG-005 (pedido express) y resolver los P1 restantes (BUG-004 cierre de jornada).
 
 ## Notes for Future Agents
 

@@ -175,28 +175,33 @@
 - **AC:** eliminar registros de prueba QA.
 - **Milestone:** C8 · **Estado:** abierto
 
-### STR-004 — Sin ordenamiento determinista en la cola de confirmación del backend
+### STR-004 — Sin ordenamiento determinista en la cola de confirmación del backend ✅ RESUELTO
 
 - **Tipo:** deuda técnica / mejora de backend · **Prioridad:** P2
 - **Área:** pedidos / listado
 - **Descripción:** `PedidoService.listarPaginado` ordena solo `PENDIENTE_STOCK`/`PENDIENTE_PREPARACION`/`PENDIENTE_ENTREGA` (express DESC, fecha ASC). `PENDIENTE_CONFIRMACION` se pagina en orden natural (id asc) → los pedidos nuevos quedan en la última página y la UI (tab "Conf.") no es determinista. Detectado al escribir el E2E de consolidación (que debió localizar paginando o usar fallback por API).
 - **AC:** ordenar también la cola de confirmación (p. ej. más recientes primero) o definir un orden estable; revisar impactos en UI/QA.
-- **Origen:** QA E2E consolidación · **Milestone:** Fase D · **Estado:** backlog
+- **Comportamiento actual:** ✅ Resuelto — `PedidoService.listarPaginado` ahora ordena TODA consulta por `estado` con `express DESC, fechaCreacion DESC, id ASC` (fechaCreacion null-safe).
+- **Evidencia:** test `listarColaConfirmacionOrdenaDeterminista` agregado a `PedidoServiceTest`.
+- **Origen:** QA E2E consolidación · **Milestone:** Hardening · **Estado:** resuelto (2026-08-16)
 
-### STR-005 — Sin endpoints de limpieza/reset de datos para tests E2E
+### STR-005 — Sin endpoints de limpieza/reset de datos para tests E2E ✅ RESUELTO
 
 - **Tipo:** deuda técnica · **Prioridad:** P2
 - **Área:** tests / backend
 - **Descripción:** los specs E2E siembran pedidos/rutas/cobranzas por API y no hay endpoint de delete/reset. La BD crece entre corridas, lo que obliga a los tests a ser tolerantes a estado acumulado (localización paginada, fallback por API) y vuelve flaky cualquier test que asuma un conjunto fijo de datos.
 - **AC:** (a) agregar endpoint/semilla de reset para entornos de test, o (b) correr E2E contra una BD reseteada por corrida; documentar la estrategia elegida.
-- **Origen:** QA E2E · **Milestone:** Fase D · **Estado:** backlog
+- **Comportamiento actual:** ✅ Resuelto — nuevo `POST /api/test/reset` (controller `@Profile({"dev","test"})`, `TestResetController`): limpia 20 tablas con `TRUNCATE CASCADE` (`TestResetDataCleaner`) y reseedea vía `DataSeeder.seed()`. `SecurityConfig` lo deja `permitAll`. **NO existe en prod** (test `TestResetNoExisteEnProdTest`). Integrado en Playwright vía `frontend/frontend/e2e/global-setup.ts` (`globalSetup`).
+- **Evidencia:** `TestResetNoExisteEnProdTest` (1 test) + E2E verde con DB limpia por corrida.
+- **Origen:** QA E2E · **Milestone:** Hardening · **Estado:** resuelto (2026-08-16)
 
-### STR-006 — Advertencia HV000271 (deprecación de `@Valid` sobre contenedores `List`)
+### STR-006 — Advertencia HV000271 (deprecación de `@Valid` sobre contenedores `List`) ✅ RESUELTO
 
 - **Tipo:** deuda técnica menor · **Prioridad:** P3
 - **Área:** validación
 - **Descripción:** Hibernate Validator emite HV000271 al usar `@Valid` directamente sobre `List<...>` en `CrearPedidoRequest`/`EntregaRequest`. No afecta funcionalidad ni tests, pero conviene migrar a `@Valid` en el tipo parametrizado (p. ej. `List<@Valid LineaRequest>`) en un futuro.
-- **Origen:** auditoría de cierre Fase D · **Milestone:** Fase D · **Estado:** backlog
+- **Comportamiento actual:** ✅ Resuelto — 4 DTOs migrados a `List<@Valid X>`: `CrearPedidoRequest`, `EntregaRequest`, `RecepcionRequest`, `CrearOrdenCompraRequest`. Cero warnings HV000271.
+- **Origen:** auditoría de cierre Fase D · **Milestone:** Hardening · **Estado:** resuelto (2026-08-16)
 
 ---
 
@@ -318,7 +323,7 @@
 ## LIMITACIONES CONOCIDAS (no bugs)
 
 - Sin soporte offline.
-- Sin monitoreo de producción (actuator/metrics) — Fase D.
-- Sin tests e2e (Playwright) — Fase D.
+- Sin monitoreo de producción (actuator/metrics) — ✅ Hardening: `/actuator/metrics` y `/actuator/prometheus` expuestos (protegidos por `ADMINISTRATIVO`).
+- Sin tests e2e (Playwright) — ✅ Hardening: suite E2E Playwright implementada (8 tests, 6 specs) con `globalSetup` que resetea la DB vía `POST /api/test/reset`.
 - Sin tests del frontend.
-- JWT_SECRET con default inseguro `cambiar-en-produccion...` (debe setearse en producción).
+- JWT_SECRET con default inseguro `cambiar-en-produccion...` (debe setearse en producción). — ✅ Hardening: en perfil `prod` el arranque FALLA con `IllegalStateException` si el secret es null/blank o igual al default inseguro.

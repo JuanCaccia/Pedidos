@@ -5,5 +5,5 @@ import jakarta.validation.constraints.NotEmpty;
 
 import java.util.List;
 
-public record EntregaRequest(@NotEmpty @Valid List<EntregaLineaRequest> entregas) {
+public record EntregaRequest(@NotEmpty List<@Valid EntregaLineaRequest> entregas) {
 }

@@ -49,17 +49,16 @@ class PedidosIntegrationTest {
 
 	@Test
 	void flujoCompletoPedidoConfirmarReserva() throws Exception {
-		String login = mockMvc.perform(post("/auth/login")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"email\":\"admin@pedidos.com\",\"password\":\"admin123\"}"))
-				.andExpect(status().isOk())
-				.andReturn().getResponse().getContentAsString();
-		String token = JsonPath.read(login, "$.token");
+		Sesion sesion = loginSesion();
+		String token = sesion.token;
+		Integer clienteId = obtenerClienteId(token, "Cliente Demo");
+		Integer vendedorId = sesion.usuarioId;
+		Integer itemId = obtenerItemId(token, "HAR");
 
 		String pedido = mockMvc.perform(post("/pedidos")
 						.header("Authorization", "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"clienteId\":1,\"vendedorId\":1,\"items\":[{\"itemId\":1,\"cantidad\":2.000,\"precioUnitario\":3.50}]}"))
+						.content("{\"clienteId\":" + clienteId + ",\"vendedorId\":" + vendedorId + ",\"items\":[{\"itemId\":" + itemId + ",\"cantidad\":2.000,\"precioUnitario\":3.50}]}"))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.estado").value("PENDIENTE_CONFIRMACION"))
 				.andReturn().getResponse().getContentAsString();
@@ -74,17 +73,15 @@ class PedidosIntegrationTest {
 
 	@Test
 	void pedidoInvalidoDevuelve400ConFieldErrors() throws Exception {
-		String login = mockMvc.perform(post("/auth/login")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"email\":\"admin@pedidos.com\",\"password\":\"admin123\"}"))
-				.andExpect(status().isOk())
-				.andReturn().getResponse().getContentAsString();
-		String token = JsonPath.read(login, "$.token");
+		Sesion sesion = loginSesion();
+		String token = sesion.token;
+		Integer vendedorId = sesion.usuarioId;
+		Integer itemId = obtenerItemId(token, "HAR");
 
 		mockMvc.perform(post("/pedidos")
 						.header("Authorization", "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"vendedorId\":1,\"items\":[{\"itemId\":1,\"cantidad\":1,\"precioUnitario\":1}]}"))
+						.content("{\"vendedorId\":" + vendedorId + ",\"items\":[{\"itemId\":" + itemId + ",\"cantidad\":1,\"precioUnitario\":1}]}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
 				.andExpect(jsonPath("$.fieldErrors.clienteId").exists());
@@ -130,7 +127,10 @@ class PedidosIntegrationTest {
 
 	@Test
 	void pedidoConItemInactivoRechazado() throws Exception {
-		String token = login();
+		Sesion sesion = loginSesion();
+		String token = sesion.token;
+		Integer clienteId = obtenerClienteId(token, "Cliente Demo");
+		Integer vendedorId = sesion.usuarioId;
 
 		String creado = mockMvc.perform(post("/items")
 						.header("Authorization", "Bearer " + token)
@@ -146,7 +146,7 @@ class PedidosIntegrationTest {
 		mockMvc.perform(post("/pedidos")
 						.header("Authorization", "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"clienteId\":1,\"vendedorId\":1,\"items\":[{\"itemId\":" + itemId
+						.content("{\"clienteId\":" + clienteId + ",\"vendedorId\":" + vendedorId + ",\"items\":[{\"itemId\":" + itemId
 								+ ",\"cantidad\":1,\"precioUnitario\":1}]}"))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.code").value("ITEM_INACTIVO"));
@@ -211,6 +211,38 @@ class PedidosIntegrationTest {
 				.andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		return JsonPath.read(login, "$.token");
+	}
+
+	private record Sesion(String token, Integer usuarioId) {
+	}
+
+	private Sesion loginSesion() throws Exception {
+		String login = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"admin@pedidos.com\",\"password\":\"admin123\"}"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		return new Sesion(JsonPath.read(login, "$.token"), JsonPath.read(login, "$.usuarioId"));
+	}
+
+	// Resuelve ids en runtime (igual que la suite E2E) para no depender de que la
+	// BD esté fresca con ids 1..N.
+	private Integer obtenerClienteId(String token, String q) throws Exception {
+		String body = mockMvc.perform(get("/clientes").param("q", q).param("size", "1")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements").value(1))
+				.andReturn().getResponse().getContentAsString();
+		return JsonPath.read(body, "$.content[0].id");
+	}
+
+	private Integer obtenerItemId(String token, String q) throws Exception {
+		String body = mockMvc.perform(get("/items").param("q", q).param("size", "1")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements").value(1))
+				.andReturn().getResponse().getContentAsString();
+		return JsonPath.read(body, "$.content[0].id");
 	}
 
 	@Test
@@ -344,16 +376,15 @@ class PedidosIntegrationTest {
 
 	@Test
 	void pedidoConLineaSinItemIdDevuelve400() throws Exception {
-		String login = mockMvc.perform(post("/auth/login")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"email\":\"admin@pedidos.com\",\"password\":\"admin123\"}"))
-				.andReturn().getResponse().getContentAsString();
-		String token = JsonPath.read(login, "$.token");
+		Sesion sesion = loginSesion();
+		String token = sesion.token;
+		Integer clienteId = obtenerClienteId(token, "Cliente Demo");
+		Integer vendedorId = sesion.usuarioId;
 
 		mockMvc.perform(post("/pedidos")
 						.header("Authorization", "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"clienteId\":1,\"vendedorId\":1,\"items\":[{\"itemId\":null,\"cantidad\":1,\"precioUnitario\":1}]}"))
+						.content("{\"clienteId\":" + clienteId + ",\"vendedorId\":" + vendedorId + ",\"items\":[{\"itemId\":null,\"cantidad\":1,\"precioUnitario\":1}]}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
 				.andExpect(jsonPath("$.fieldErrors['items[0].itemId']").exists());

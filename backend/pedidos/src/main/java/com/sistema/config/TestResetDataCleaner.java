@@ -1,5 +1,6 @@
 package com.sistema.config;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -7,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Component
+@Profile({"dev", "test"})
 public class TestResetDataCleaner {
 
 	private static final List<String> TABLAS = List.of(
@@ -26,6 +28,6 @@ public class TestResetDataCleaner {
 
 	@Transactional
 	public void limpiar() {
-		jdbcTemplate.execute("TRUNCATE TABLE " + String.join(", ", TABLAS) + " CASCADE");
+		jdbcTemplate.execute("TRUNCATE TABLE " + String.join(", ", TABLAS) + " RESTART IDENTITY CASCADE");
 	}
 }

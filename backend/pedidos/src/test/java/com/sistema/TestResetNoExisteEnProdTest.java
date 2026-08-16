@@ -1,6 +1,7 @@
 package com.sistema;
 
 import com.sistema.config.TestResetController;
+import com.sistema.config.TestResetDataCleaner;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,8 +20,10 @@ class TestResetNoExisteEnProdTest {
 	private ApplicationContext applicationContext;
 
 	@Test
-	void testResetControllerNoRegistradoEnPerfilProd() {
+	void testResetNoRegistradoEnPerfilProd() {
 		assertTrue(applicationContext.getBeansOfType(TestResetController.class).isEmpty(),
 				"El endpoint /test/reset NO debe existir en perfil prod");
+		assertTrue(applicationContext.getBeansOfType(TestResetDataCleaner.class).isEmpty(),
+				"El bean de limpieza de /test/reset NO debe existir en perfil prod");
 	}
 }

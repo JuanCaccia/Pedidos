@@ -29,8 +29,8 @@ public class ItemJpaEntity extends BaseEntity {
 	@Column(name = "precio_lista", nullable = false, precision = 12, scale = 2)
 	private BigDecimal precioLista = BigDecimal.ZERO;
 
-	@Column(length = 100)
-	private String categoria;
+	@Column(name = "categoria_id")
+	private Long categoriaId;
 
 	protected ItemJpaEntity() {
 		// required by JPA
@@ -90,11 +90,11 @@ public class ItemJpaEntity extends BaseEntity {
 		this.precioLista = precioLista;
 	}
 
-	public String getCategoria() {
-		return categoria;
+	public Long getCategoriaId() {
+		return categoriaId;
 	}
 
-	public void setCategoria(String categoria) {
-		this.categoria = categoria;
+	public void setCategoriaId(Long categoriaId) {
+		this.categoriaId = categoriaId;
 	}
 }

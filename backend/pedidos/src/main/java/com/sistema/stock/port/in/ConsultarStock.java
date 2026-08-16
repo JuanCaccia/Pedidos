@@ -15,10 +15,10 @@ public interface ConsultarStock {
 
 	List<Item> listarItems();
 
-	PageResponse<Item> listarItemsPaginado(String q, String categoria, int page, int size);
+	PageResponse<Item> listarItemsPaginado(String q, Long categoriaId, int page, int size);
 
-	default PageResponse<Item> listarItemsActivosPaginado(String q, String categoria, int page, int size) {
-		return listarItemsPaginado(q, categoria, page, size);
+	default PageResponse<Item> listarItemsActivosPaginado(String q, Long categoriaId, int page, int size) {
+		return listarItemsPaginado(q, categoriaId, page, size);
 	}
 
 	List<String> listarCategorias();

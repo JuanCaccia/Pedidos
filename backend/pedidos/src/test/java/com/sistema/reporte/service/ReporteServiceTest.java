@@ -204,13 +204,12 @@ class ReporteServiceTest {
 		}
 
 		@Override
-		public PageResponse<Item> listarItemsPaginado(String q, String categoria, int page, int size) {
-			String cat = categoria == null || categoria.isBlank() ? null : categoria.trim();
+		public PageResponse<Item> listarItemsPaginado(String q, Long categoriaId, int page, int size) {
 			List<Item> todos = items.stream()
 					.filter(i -> q == null || q.isBlank()
 							|| i.getSku().toLowerCase().contains(q.toLowerCase())
 							|| i.getNombre().toLowerCase().contains(q.toLowerCase()))
-					.filter(i -> cat == null || cat.equals(i.getCategoria()))
+					.filter(i -> categoriaId == null || categoriaId.equals(i.getCategoriaId()))
 					.toList();
 			int total = todos.size();
 			int from = Math.min(page * size, total);

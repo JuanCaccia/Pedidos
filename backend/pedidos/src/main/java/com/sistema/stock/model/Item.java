@@ -11,7 +11,8 @@ public class Item {
 	private boolean activo = true;
 	private BigDecimal stockMinimo = BigDecimal.ZERO;
 	private BigDecimal precioLista = BigDecimal.ZERO;
-	private String categoria;
+	private Long categoriaId;
+	private String categoriaNombre;
 
 	public Item() {
 	}
@@ -84,11 +85,19 @@ public class Item {
 		this.precioLista = precioLista;
 	}
 
-	public String getCategoria() {
-		return categoria;
+	public Long getCategoriaId() {
+		return categoriaId;
 	}
 
-	public void setCategoria(String categoria) {
-		this.categoria = categoria;
+	public void setCategoriaId(Long categoriaId) {
+		this.categoriaId = categoriaId;
+	}
+
+	public String getCategoriaNombre() {
+		return categoriaNombre;
+	}
+
+	public void setCategoriaNombre(String categoriaNombre) {
+		this.categoriaNombre = categoriaNombre;
 	}
 }

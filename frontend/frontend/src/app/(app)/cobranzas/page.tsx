@@ -325,7 +325,7 @@ export default function CobranzasPage() {
               placeholder="Buscar cliente..."
               search={async (q) => {
                 const data = await apiGet<PageResponse<Cliente>>(
-                  `/api/clientes?q=${encodeURIComponent(q)}&size=20`
+                  `/api/clientes?q=${encodeURIComponent(q)}&size=20&activos=true`
                 );
                 return data.content.map((c) => ({
                   id: c.id,

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api";
-import type { ApiError, Cliente, Item, Pedido, PedidoItem, EstadoPedido, PageResponse, Sustitucion } from "@/lib/types";
+import type { ApiError, Categoria, Cliente, Item, Pedido, PedidoItem, EstadoPedido, PageResponse, Sustitucion } from "@/lib/types";
 import { formatDateTime, formatMoney, formatNumber } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import EstadoBadge from "@/components/EstadoBadge";
@@ -14,6 +15,7 @@ import Drawer from "@/components/Drawer";
 import Modal from "@/components/Modal";
 import ConfirmacionFrictionada from "@/components/ConfirmacionFrictionada";
 import Combobox from "@/components/Combobox";
+import { useToast } from "@/components/Toast";
 import { IconClose } from "@/components/icons";
 import { exportarCSV } from "@/lib/export";
 
@@ -50,12 +52,25 @@ interface FormItemRow {
 }
 
 export default function PedidosPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <PedidosPageInner />
+    </Suspense>
+  );
+}
+
+function PedidosPageInner() {
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const hasAnyRole = (...roles: string[]) => roles.some((r) => user?.roles.includes(r) ?? false);
+  const { success: showToast } = useToast();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [estado, setEstado] = useState<string>("");
+  const [estado, setEstado] = useState<string>(() => {
+    const tab = searchParams.get("tab");
+    return tab && TABS.some((t) => t.estado === tab) ? tab : "";
+  });
   const [soloPendienteStock, setSoloPendienteStock] = useState(false);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -81,7 +96,6 @@ export default function PedidosPage() {
   const [rechazarPedido, setRechazarPedido] = useState<Pedido | null>(null);
 
   const [sustituirPedido, setSustituirPedido] = useState<Pedido | null>(null);
-  const [sustitucionMessage, setSustitucionMessage] = useState<string | null>(null);
 
   const [marcarFaltante, setMarcarFaltante] = useState<{ pedido: Pedido; item: PedidoItem } | null>(null);
 
@@ -395,15 +409,6 @@ export default function PedidosPage() {
 
       {error && <ErrorBox message={error} />}
 
-      {sustitucionMessage && (
-        <div
-          role="status"
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300"
-        >
-          {sustitucionMessage}
-        </div>
-      )}
-
       {loading ? (
         <Loading />
       ) : (
@@ -491,7 +496,6 @@ export default function PedidosPage() {
             onReagendar={() => reagendar(detallePedido)}
             onRechazar={() => setRechazarPedido(detallePedido)}
             onSustituir={() => {
-              setSustitucionMessage(null);
               setSustituirPedido(detallePedido);
             }}
             onMarcarFaltante={(item) => setMarcarFaltante({ pedido: detallePedido, item })}
@@ -521,9 +525,7 @@ export default function PedidosPage() {
           onClose={() => setSustituirPedido(null)}
           onConfirm={async () => {
             setSustituirPedido(null);
-            setSustitucionMessage(
-              `Sustitución registrada en el pedido ${sustituirPedido.numero}.`
-            );
+            showToast(`Sustitución registrada en el pedido ${sustituirPedido.numero}.`);
             await loadPedidos();
           }}
         />
@@ -1016,12 +1018,12 @@ function SustitucionModal({
           onChange={setItemSustitutoId}
           search={async (q) => {
             const data = await apiGet<PageResponse<Item>>(
-              `/api/items?q=${encodeURIComponent(q)}&size=20`
+              `/api/items?q=${encodeURIComponent(q)}&size=20&activos=true`
             );
             return data.content.map((i) => ({
               id: i.id,
               label: `${i.sku} — ${i.nombre}`,
-              sublabel: i.categoria ?? "",
+              sublabel: i.categoriaNombre ?? "",
             }));
           }}
         />
@@ -1097,13 +1099,13 @@ function NuevoPedidoForm({
   const [fechaJornada, setFechaJornada] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [express, setExpress] = useState(false);
-  const [categoria, setCategoria] = useState("");
-  const [categorias, setCategorias] = useState<string[]>([]);
+  const [categoriaId, setCategoriaId] = useState("");
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [lineas, setLineas] = useState<FormItemRow[]>([{ key: Date.now(), itemId: null, itemLabel: null, cantidad: "", precioUnitario: "" }]);
 
   useEffect(() => {
-    apiGet<string[]>("/api/items/categorias")
+    apiGet<Categoria[]>("/api/categorias")
       .then(setCategorias)
       .catch(() => {
         // El select de categorías mostrará solo "Todas las categorías"
@@ -1112,13 +1114,14 @@ function NuevoPedidoForm({
 
   useEffect(() => {
     const params = new URLSearchParams({ size: "500" });
-    if (categoria) params.set("categoria", categoria);
+    if (categoriaId) params.set("categoriaId", categoriaId);
+    params.set("activos", "true");
     apiGet<PageResponse<Item>>(`/api/items?${params.toString()}`)
       .then((data) => setItems(data.content))
       .catch(() => {
         setItems([]);
       });
-  }, [categoria]);
+  }, [categoriaId]);
 
   function addLinea() {
     setLineas((prev) => [...prev, { key: Date.now() + Math.random(), itemId: null, itemLabel: null, cantidad: "", precioUnitario: "" }]);
@@ -1181,7 +1184,7 @@ function NuevoPedidoForm({
             onChange={setClienteId}
             search={async (q) => {
               const data = await apiGet<PageResponse<Cliente>>(
-                `/api/clientes?q=${encodeURIComponent(q)}&size=20`
+                `/api/clientes?q=${encodeURIComponent(q)}&size=20&activos=true`
               );
               return data.content.map((c) => ({
                 id: c.id,
@@ -1247,16 +1250,16 @@ function NuevoPedidoForm({
             </label>
             <select
               id="pedido-categoria"
-              value={categoria}
+              value={categoriaId}
               onChange={(e) => {
-                setCategoria(e.target.value);
+                setCategoriaId(e.target.value);
               }}
               className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
             >
               <option value="">Todas las categorías</option>
               {categorias.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
                 </option>
               ))}
             </select>
@@ -1285,12 +1288,13 @@ function NuevoPedidoForm({
                   }}
                   search={async (q) => {
                     const params = new URLSearchParams({ q, size: "20" });
-                    if (categoria) params.set("categoria", categoria);
+                    if (categoriaId) params.set("categoriaId", categoriaId);
+                    params.set("activos", "true");
                     const data = await apiGet<PageResponse<Item>>(`/api/items?${params.toString()}`);
                     return data.content.map((i) => ({
                       id: i.id,
                       label: `${i.sku} — ${i.nombre}`,
-                      sublabel: i.categoria ?? "",
+                      sublabel: i.categoriaNombre ?? "",
                     }));
                   }}
                 />

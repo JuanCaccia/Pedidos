@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
-import type { EstadoOrdenCompra, Item, OrdenCompra, PageResponse, Proveedor } from "@/lib/types";
+import type { Categoria, EstadoOrdenCompra, Item, OrdenCompra, PageResponse, Proveedor } from "@/lib/types";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import Loading from "@/components/Loading";
 import ErrorBox from "@/components/ErrorBox";
@@ -428,8 +428,8 @@ function NuevaOrdenForm({
 }) {
   const [proveedorId, setProveedorId] = useState<number | null>(null);
   const [observaciones, setObservaciones] = useState("");
-  const [categoria, setCategoria] = useState("");
-  const [categorias, setCategorias] = useState<string[]>([]);
+  const [categoriaId, setCategoriaId] = useState("");
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [lineas, setLineas] = useState<FormLineaRow[]>([
     { key: Date.now(), itemId: null, cantidad: "", precioUnitario: "" },
   ]);
@@ -437,7 +437,7 @@ function NuevaOrdenForm({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    apiGet<string[]>("/api/items/categorias")
+    apiGet<Categoria[]>("/api/categorias")
       .then(setCategorias)
       .catch(() => {
         // El select de categorías mostrará solo "Todas las categorías"
@@ -544,17 +544,17 @@ function NuevaOrdenForm({
             </label>
             <select
               id="oc-categoria"
-              value={categoria}
+              value={categoriaId}
               onChange={(e) => {
-                setCategoria(e.target.value);
+                setCategoriaId(e.target.value);
                 setLineas((prev) => prev.map((l) => ({ ...l, itemId: null })));
               }}
               className={INPUT_CLASS}
             >
               <option value="">Todas las categorías</option>
               {categorias.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
                 </option>
               ))}
             </select>
@@ -563,18 +563,19 @@ function NuevaOrdenForm({
             {lineas.map((linea) => (
               <div key={linea.key} className="grid grid-cols-[1fr_5rem_6rem_auto] gap-2">
                 <Combobox
-                  key={`${linea.key}-${categoria}`}
+                  key={`${linea.key}-${categoriaId}`}
                   placeholder="Buscar item..."
                   value={linea.itemId}
                   onChange={(id) => updateLinea(linea.key, "itemId", id)}
                   search={async (q) => {
                     const params = new URLSearchParams({ q, size: "20" });
-                    if (categoria) params.set("categoria", categoria);
+                    if (categoriaId) params.set("categoriaId", categoriaId);
+                    params.set("activos", "true");
                     const data = await apiGet<PageResponse<Item>>(`/api/items?${params.toString()}`);
                     return data.content.map((i) => ({
                       id: i.id,
                       label: `${i.sku} — ${i.nombre}`,
-                      sublabel: i.categoria ?? "",
+                      sublabel: i.categoriaNombre ?? "",
                     }));
                   }}
                 />

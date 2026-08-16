@@ -16,7 +16,8 @@ interface ItemDTO {
   unidadMedida: string;
   stockMinimo: string | null;
   precioLista: string | null;
-  categoria: string | null;
+  categoriaId: number | null;
+  categoriaNombre: string | null;
   activo: boolean;
 }
 interface ClienteDTO {
@@ -125,7 +126,7 @@ async function setupPedidoEntregado(api: APIRequestContext, admin: LoginDTO) {
       unidadMedida: it.unidadMedida,
       stockMinimo: it.stockMinimo,
       precioLista: String(precio),
-      categoria: it.categoria,
+      categoriaId: it.categoriaId,
     });
   await actualizarPrecio(har, 100);
   await actualizarPrecio(ace, 50);

@@ -23,8 +23,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/items")
 @Tag(name = "Items")
@@ -41,24 +39,19 @@ public class ItemController {
 	@PostMapping
 	public ResponseEntity<ItemResponse> crear(@Valid @RequestBody ItemRequest request) {
 		Item item = gestionarItem.crearItem(new GestionarItem.CrearItemCommand(
-				request.sku(), request.nombre(), request.unidadMedida(), request.stockMinimo(), request.precioLista(), request.categoria()));
+				request.sku(), request.nombre(), request.unidadMedida(), request.stockMinimo(), request.precioLista(), request.categoriaId()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(ItemResponse.from(item));
 	}
 
 	@GetMapping
 	public PageResponse<ItemResponse> listar(@RequestParam(required = false) String q,
-			@RequestParam(required = false) String categoria,
+			@RequestParam(required = false) Long categoriaId,
 			@RequestParam(required = false) Boolean activos,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
 		PageResponse<Item> pagina = Boolean.TRUE.equals(activos)
-				? consultarStock.listarItemsActivosPaginado(q, categoria, page, size)
-				: consultarStock.listarItemsPaginado(q, categoria, page, size);
+				? consultarStock.listarItemsActivosPaginado(q, categoriaId, page, size)
+				: consultarStock.listarItemsPaginado(q, categoriaId, page, size);
 		return PageMapper.of(pagina.content(), pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages(), ItemResponse::from);
-	}
-
-	@GetMapping("/categorias")
-	public List<String> categorias() {
-		return consultarStock.listarCategorias();
 	}
 
 	@GetMapping("/{id}")
@@ -71,7 +64,7 @@ public class ItemController {
 	@PutMapping("/{id}")
 	public ResponseEntity<ItemResponse> actualizar(@PathVariable Long id, @Valid @RequestBody ActualizarItemRequest request) {
 		Item item = gestionarItem.actualizarItem(new GestionarItem.ActualizarItemCommand(
-				id, request.nombre(), request.unidadMedida(), request.stockMinimo(), request.precioLista(), request.categoria()));
+				id, request.nombre(), request.unidadMedida(), request.stockMinimo(), request.precioLista(), request.categoriaId()));
 		return ResponseEntity.ok(ItemResponse.from(item));
 	}
 

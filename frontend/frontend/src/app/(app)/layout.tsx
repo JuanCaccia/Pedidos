@@ -12,6 +12,7 @@ import ErrorBox from "@/components/ErrorBox";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import NotificationsBell from "@/components/NotificationsBell";
+import { ToastProvider } from "@/components/Toast";
 import { IconMenu } from "@/components/icons";
 
 const NAV_ITEMS = [
@@ -139,7 +140,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </Button>
           </div>
         </header>
-        <main className="flex-1 px-6 py-6">{children}</main>
+        <main className="flex-1 px-6 py-6">
+          <ToastProvider>{children}</ToastProvider>
+        </main>
       </div>
 
       {showPassword && (

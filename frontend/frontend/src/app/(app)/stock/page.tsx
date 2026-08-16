@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api";
 import type { Item, Lote, MovimientoStock, PageResponse, ReporteStockItem } from "@/lib/types";
 import { formatDate, formatDateTime, formatNumber } from "@/lib/format";
@@ -10,6 +11,7 @@ import ErrorBox from "@/components/ErrorBox";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import Pagination from "@/components/Pagination";
+import { useToast } from "@/components/Toast";
 import { exportarCSV } from "@/lib/export";
 
 const MOV_PAGE_SIZE = 20;
@@ -20,18 +22,37 @@ const INPUT_CLASS =
 type StockModal = "ingreso" | "merma" | "ajuste" | null;
 
 export default function StockPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <StockPageInner />
+    </Suspense>
+  );
+}
+
+function StockPageInner() {
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const canOperate =
     user?.roles.some((r) => r === "ENCARGADO_DEPOSITO" || r === "ADMINISTRATIVO") ?? false;
+  const { success: showToast } = useToast();
 
   const [stock, setStock] = useState<ReporteStockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [soloBajo, setSoloBajo] = useState<boolean>(
+    () => searchParams.get("filtro") === "bajo"
+  );
 
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [lotesLoading, setLotesLoading] = useState(true);
   const [lotesError, setLotesError] = useState<string | null>(null);
-  const [lotesFilter, setLotesFilter] = useState<"todos" | "por-vencer" | "vencidos" | "agotados">("todos");
+  const [lotesFilter, setLotesFilter] = useState<"todos" | "por-vencer" | "vencidos" | "agotados">(
+    () => {
+      if (searchParams.get("filtro") === "vencer") return "por-vencer";
+      return "todos";
+    }
+  );
+  const lotesRef = useRef<HTMLElement | null>(null);
 
   const [selected, setSelected] = useState<ReporteStockItem | null>(null);
   const [movimientos, setMovimientos] = useState<MovimientoStock[]>([]);
@@ -45,7 +66,6 @@ export default function StockPage() {
   const [modal, setModal] = useState<StockModal>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const loadStock = useCallback(async () => {
     setLoading(true);
@@ -81,6 +101,12 @@ export default function StockPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "lotes" && lotesRef.current) {
+      lotesRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!canOperate) return;
@@ -162,13 +188,12 @@ export default function StockPage() {
   }
 
   function openModal(next: StockModal) {
-    setSuccessMsg(null);
     setFormError(null);
     setModal(next);
   }
 
   async function handleCreated(message: string) {
-    setSuccessMsg(message);
+    showToast(message);
     setModal(null);
     setSelected(null);
     await loadStock();
@@ -181,6 +206,8 @@ export default function StockPage() {
       setError(err instanceof Error ? err.message : "Error inesperado");
     }
   }
+
+  const stockVisibles = soloBajo ? stock.filter(isLow) : stock;
 
   return (
     <div className="flex flex-col gap-6">
@@ -204,11 +231,20 @@ export default function StockPage() {
         </Button>
       </div>
 
-      {successMsg && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-          {successMsg}
-        </div>
-      )}
+      <div className="flex items-center gap-2 text-xs">
+        <button
+          type="button"
+          aria-pressed={soloBajo}
+          onClick={() => setSoloBajo((v) => !v)}
+          className={`rounded-full px-3 py-1 font-medium transition-colors ${
+            soloBajo
+              ? "bg-red-600 text-white"
+              : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+          }`}
+        >
+          Solo bajo
+        </button>
+      </div>
 
       {error ? (
         <ErrorBox message={error} />
@@ -229,14 +265,14 @@ export default function StockPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                {stock.length === 0 && (
+                {stockVisibles.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-neutral-500">
-                      No hay items con stock
+                      {soloBajo ? "Sin items con stock bajo" : "No hay items con stock"}
                     </td>
                   </tr>
                 )}
-                {stock.map((item) => {
+                {stockVisibles.map((item) => {
                   const low = isLow(item);
                   const isSelected = selected?.itemId === item.itemId;
                   return (
@@ -355,7 +391,10 @@ export default function StockPage() {
         </section>
       )}
 
-      <section className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+      <section
+        ref={lotesRef}
+        className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 px-5 py-3.5 dark:border-neutral-800">
           <h2 className="font-medium text-neutral-900 dark:text-neutral-100">Lotes</h2>
           <div className="flex flex-wrap gap-2 text-xs">
@@ -369,6 +408,7 @@ export default function StockPage() {
             ).map(([value, label]) => (
               <button
                 key={value}
+                aria-pressed={lotesFilter === value}
                 onClick={() => setLotesFilter(value)}
                 className={`rounded-full px-3 py-1 font-medium transition-colors ${
                   lotesFilter === value

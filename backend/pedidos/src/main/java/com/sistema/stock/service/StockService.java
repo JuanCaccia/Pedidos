@@ -1,5 +1,6 @@
 package com.sistema.stock.service;
 
+import com.sistema.categoria.port.out.CategoriaRepository;
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
 import com.sistema.common.model.PageResponse;
@@ -35,14 +36,16 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	private final ItemRepository itemRepository;
 	private final LoteRepository loteRepository;
 	private final MovimientoStockRepository movimientoStockRepository;
+	private final CategoriaRepository categoriaRepository;
 	private final BigDecimal ajusteMaximoEncargado;
 
 	public StockService(ItemRepository itemRepository, LoteRepository loteRepository,
-			MovimientoStockRepository movimientoStockRepository,
+			MovimientoStockRepository movimientoStockRepository, CategoriaRepository categoriaRepository,
 			@Value("${app.stock.ajuste-maximo-encargado:50}") BigDecimal ajusteMaximoEncargado) {
 		this.itemRepository = itemRepository;
 		this.loteRepository = loteRepository;
 		this.movimientoStockRepository = movimientoStockRepository;
+		this.categoriaRepository = categoriaRepository;
 		this.ajusteMaximoEncargado = ajusteMaximoEncargado;
 	}
 
@@ -75,8 +78,8 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		Item item = new Item(sku, command.nombre().trim(), command.unidadMedida().trim());
 		item.setStockMinimo(minimo);
 		item.setPrecioLista(precio);
-		item.setCategoria(normalizarCategoria(command.categoria()));
-		return itemRepository.save(item);
+		asignarCategoria(item, command.categoriaId());
+		return resolverNombreCategoria(itemRepository.save(item));
 	}
 
 	@Override
@@ -101,8 +104,8 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		item.setUnidadMedida(command.unidadMedida().trim());
 		item.setStockMinimo(minimo);
 		item.setPrecioLista(precio);
-		item.setCategoria(normalizarCategoria(command.categoria()));
-		return itemRepository.save(item);
+		asignarCategoria(item, command.categoriaId());
+		return resolverNombreCategoria(itemRepository.save(item));
 	}
 
 	@Override
@@ -233,27 +236,29 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 
 	@Override
 	public Optional<Item> buscarItemPorId(Long id) {
-		return itemRepository.findById(id);
+		return itemRepository.findById(id).map(this::resolverNombreCategoria);
 	}
 
 	@Override
 	public List<Item> listarItems() {
-		return itemRepository.findAll();
+		return itemRepository.findAll().stream().map(this::resolverNombreCategoria).toList();
 	}
 
 	@Override
-	public PageResponse<Item> listarItemsPaginado(String q, String categoria, int page, int size) {
-		return itemRepository.buscar(q, categoria, page, size);
+	public PageResponse<Item> listarItemsPaginado(String q, Long categoriaId, int page, int size) {
+		return mapearConCategoria(itemRepository.buscar(q, categoriaId, page, size));
 	}
 
 	@Override
-	public PageResponse<Item> listarItemsActivosPaginado(String q, String categoria, int page, int size) {
-		return itemRepository.buscarActivos(q, categoria, page, size);
+	public PageResponse<Item> listarItemsActivosPaginado(String q, Long categoriaId, int page, int size) {
+		return mapearConCategoria(itemRepository.buscarActivos(q, categoriaId, page, size));
 	}
 
 	@Override
 	public List<String> listarCategorias() {
-		return itemRepository.listarCategorias();
+		return categoriaRepository.findByActivoTrue().stream()
+				.map(com.sistema.categoria.model.Categoria::getNombre)
+				.toList();
 	}
 
 	@Override
@@ -354,10 +359,28 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		}
 	}
 
-	private String normalizarCategoria(String categoria) {
-		if (categoria == null || categoria.isBlank()) {
-			return null;
+	private void asignarCategoria(Item item, Long categoriaId) {
+		item.setCategoriaId(categoriaId);
+		if (categoriaId != null) {
+			resolverNombreCategoria(item);
+			if (item.getCategoriaNombre() == null) {
+				throw new BusinessException("CATEGORIA_NO_ENCONTRADA", "La categoría no existe: " + categoriaId);
+			}
+		} else {
+			item.setCategoriaNombre(null);
 		}
-		return categoria.trim();
+	}
+
+	private Item resolverNombreCategoria(Item item) {
+		if (item.getCategoriaId() != null && item.getCategoriaNombre() == null) {
+			categoriaRepository.findById(item.getCategoriaId())
+					.ifPresent(c -> item.setCategoriaNombre(c.getNombre()));
+		}
+		return item;
+	}
+
+	private PageResponse<Item> mapearConCategoria(PageResponse<Item> pagina) {
+		return new PageResponse<>(pagina.content().stream().map(this::resolverNombreCategoria).toList(),
+				pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages());
 	}
 }

@@ -6,10 +6,10 @@ import java.math.BigDecimal;
 
 public interface GestionarItem {
 
-	record CrearItemCommand(String sku, String nombre, String unidadMedida, BigDecimal stockMinimo, BigDecimal precioLista, String categoria) {
+	record CrearItemCommand(String sku, String nombre, String unidadMedida, BigDecimal stockMinimo, BigDecimal precioLista, Long categoriaId) {
 	}
 
-	record ActualizarItemCommand(Long itemId, String nombre, String unidadMedida, BigDecimal stockMinimo, BigDecimal precioLista, String categoria) {
+	record ActualizarItemCommand(Long itemId, String nombre, String unidadMedida, BigDecimal stockMinimo, BigDecimal precioLista, Long categoriaId) {
 	}
 
 	Item crearItem(CrearItemCommand command);

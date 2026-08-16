@@ -16,9 +16,7 @@ public interface ItemRepository {
 
 	List<Item> findAll();
 
-	PageResponse<Item> buscar(String q, String categoria, int page, int size);
+	PageResponse<Item> buscar(String q, Long categoriaId, int page, int size);
 
-	PageResponse<Item> buscarActivos(String q, String categoria, int page, int size);
-
-	List<String> listarCategorias();
+	PageResponse<Item> buscarActivos(String q, Long categoriaId, int page, int size);
 }

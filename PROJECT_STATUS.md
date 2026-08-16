@@ -9,7 +9,7 @@
 
 ## Status
 
-**COMPLETA / VERIFICADA — Backend 166 tests + E2E Playwright 7 tests en verde; Fase D cerrada; Bloques P1.A (integridad) y P1.B (usabilidad crítica) de saneamiento aplicados y verificados.**
+**COMPLETA / VERIFICADA — Backend 181 tests + E2E Playwright 8 tests en verde; Fase D cerrada; Bloques P1.A, P1.B y P2.A de saneamiento aplicados y verificados.**
 
 ## Milestone Objective
 
@@ -23,7 +23,7 @@ TTL de reservas, consolidación, export CSV).
 
 La mayoría de los flujos centrales **funcionan y son consistentes** entre backend y frontend
 (ciclo de pedido, consolidación, OC/recepción, cobranzas, faltantes+notificaciones, CSV,
-TTL config). Backend: **166 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
+TTL config). Backend: **181 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
 Los dos bloqueantes P1 de C8 (BUG-002 autorización, BUG-003 sustitución con diferencia
 negativa) fueron **resueltos y verificados en vivo**. Persisten como P1: BUG-004 (cierre de
 jornada con EN_VIAJE colgados) y BUG-005 (decisión de alcance "pedido express"). Además
@@ -51,7 +51,7 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 
 ## Completed
 
-* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (166 tests verdes).
+* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (181 tests verdes).
 * Frontend Next.js 16.3 completo (login, dashboard, pedidos, stock, clientes/items/usuarios/
   proveedores, rutas+entregas, OC, cobranzas+caja, turno) — build OK.
 * Migraciones Flyway V1→V16 validadas.
@@ -66,6 +66,10 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
   - Turno operativo: PedidoCard muestra domicilio, observaciones y próximas paradas del repartidor.
   - Lotes en stock: `LoteResponse` con saldo/estado (VENCIDO/AGOTADO/VIGENTE) + `GET /stock/lotes` + sección de Lotes con filtros en `/stock`.
   - Fix de build: `tsconfig` excluye `e2e/` del typecheck (los specs no bloquean el build de la app).
+- **Saneamiento Bloque P2.A (catálogo, accesos y navegabilidad) aplicado y verificado:**
+  - Accesos: `/reportes/stock` abierto a `ENCARGADO_DEPOSITO`; comboboxes de creación envían `activos=true`.
+  - Categoría ABMC (AUD-007): migración V17 (tabla `categoria`, `item.categoria_id`, **drop de `item.categoria`**), módulo hexagonal `categoria`, selector por `categoriaId` en item y pedidos, gestión en `/items`.
+  - Dashboard accionable (AUD-011): links con pre-filtrado (`?filtro=bajo`, `?tab=lotes&filtro=vencer`, `?tab=PENDIENTE_STOCK`, `?tab=RE_AGENDADO`) + componente `Toast` global.
 
 ## Partially Completed
 
@@ -144,7 +148,7 @@ completed: yes (subagente + verificación manual de bloqueantes)
 result: 2 bloqueantes (BUG-002, BUG-003) RESUELTOS y verificados + 13 hallazgos (QA-01..13) + STR
 
 Automated tests:
-- Backend: **166 tests, 0 fallos** (surefire).
+- Backend: **181 tests, 0 fallos** (surefire).
 - Frontend: **sin tests unitarios; E2E con Playwright: 7 tests verdes, estable como gate de CI** (`npm run test:e2e`).
 
 End-to-end verification:

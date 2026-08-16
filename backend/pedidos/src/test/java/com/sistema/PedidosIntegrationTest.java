@@ -180,6 +180,30 @@ class PedidosIntegrationTest {
 				.andExpect(jsonPath("$.totalElements").value(1));
 	}
 
+	@Test
+	void encargadoDepositoPuedeVerStockPeroNoRestoDeReportes() throws Exception {
+		String token = login();
+
+		// ENCARGADO_DEPOSITO (admin tiene ese rol) puede leer stock por item.
+		mockMvc.perform(get("/reportes/stock").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/reportes/stock/exportar.csv").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk());
+
+		// El resto de reportes sigue restringido a ADMINISTRATIVO.
+		String repartidorLogin = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"repartidor@pedidos.com\",\"password\":\"repartidor123\"}"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		String repartidorToken = JsonPath.read(repartidorLogin, "$.token");
+
+		mockMvc.perform(get("/reportes/ventas").header("Authorization", "Bearer " + repartidorToken))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/reportes/stock").header("Authorization", "Bearer " + repartidorToken))
+				.andExpect(status().isForbidden());
+	}
+
 	private String login() throws Exception {
 		String login = mockMvc.perform(post("/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -311,5 +335,67 @@ class PedidosIntegrationTest {
 		String adminToken = JsonPath.read(adminLogin, "$.token");
 		mockMvc.perform(get("/actuator/info").header("Authorization", "Bearer " + adminToken))
 				.andExpect(status().isOk());
+	}
+
+	@Test
+	void categoriaRequiereDepositoParaEscribir() throws Exception {
+		// repartidor autenticado puede listar, pero no crear.
+		String repartidorLogin = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"repartidor@pedidos.com\",\"password\":\"repartidor123\"}"))
+				.andReturn().getResponse().getContentAsString();
+		String repartidorToken = JsonPath.read(repartidorLogin, "$.token");
+
+		mockMvc.perform(get("/categorias").header("Authorization", "Bearer " + repartidorToken))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/categorias")
+						.header("Authorization", "Bearer " + repartidorToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"nombre\":\"No autorizada\"}"))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void crearCategoriaYItemConCategoria() throws Exception {
+		String token = login();
+
+		// Crear una categoría.
+		String categoria = mockMvc.perform(post("/categorias")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"nombre\":\"Limpieza IT\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.nombre").value("Limpieza IT"))
+				.andReturn().getResponse().getContentAsString();
+		Integer categoriaId = JsonPath.read(categoria, "$.id");
+
+		// Crear un item asociado a la categoría.
+		String item = mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"IT-CAT-1\",\"nombre\":\"Lavandina\",\"unidadMedida\":\"UN\",\"categoriaId\":" + categoriaId + "}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.categoriaId").value(categoriaId))
+				.andExpect(jsonPath("$.categoriaNombre").value("Limpieza IT"))
+				.andReturn().getResponse().getContentAsString();
+		Integer itemId = JsonPath.read(item, "$.id");
+
+		// Buscar por id devuelve el nombre de la categoría resuelto.
+		mockMvc.perform(get("/items/" + itemId).header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.categoriaId").value(categoriaId))
+				.andExpect(jsonPath("$.categoriaNombre").value("Limpieza IT"));
+
+		// Listar categorías (activas) incluye la creada.
+		mockMvc.perform(get("/categorias").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[?(@.nombre == 'Limpieza IT')]").exists());
+
+		// Filtrar items por categoriaId.
+		mockMvc.perform(get("/items").param("categoriaId", String.valueOf(categoriaId))
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements").value(1));
 	}
 }

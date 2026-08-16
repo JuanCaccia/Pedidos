@@ -1,5 +1,7 @@
 package com.sistema.stock.service;
 
+import com.sistema.categoria.model.Categoria;
+import com.sistema.categoria.port.out.CategoriaRepository;
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
 import com.sistema.common.model.PageResponse;
@@ -41,13 +43,16 @@ class StockServiceTest {
 	private FakeItemRepository itemRepository;
 	private FakeLoteRepository loteRepository;
 	private FakeMovimientoStockRepository movimientoRepository;
+	private FakeCategoriaRepository categoriaRepository;
 
 	@BeforeEach
 	void setUp() {
 		itemRepository = new FakeItemRepository();
 		loteRepository = new FakeLoteRepository();
 		movimientoRepository = new FakeMovimientoStockRepository();
-		stockService = new StockService(itemRepository, loteRepository, movimientoRepository, new BigDecimal("50"));
+		categoriaRepository = new FakeCategoriaRepository();
+		stockService = new StockService(itemRepository, loteRepository, movimientoRepository, categoriaRepository,
+				new BigDecimal("50"));
 	}
 
 	private com.sistema.usuario.model.Usuario adminActor() {
@@ -426,31 +431,44 @@ class StockServiceTest {
 
 	@Test
 	void crearItemConCategoriaPersiste() {
+		Categoria harinas = categoriaRepository.save(new Categoria("Harinas"));
 		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand(
-				"SKU-CAT", "Harina Integral", "KG", null, null, "Harinas"));
-		assertEquals("Harinas", item.getCategoria());
+				"SKU-CAT", "Harina Integral", "KG", null, null, harinas.getId()));
+		assertEquals(harinas.getId(), item.getCategoriaId());
+		assertEquals("Harinas", item.getCategoriaNombre());
+	}
+
+	@Test
+	void crearItemConCategoriaInexistenteLanza() {
+		assertThrows(BusinessException.class, () -> stockService.crearItem(
+				new GestionarItem.CrearItemCommand("SKU-CATX", "X", "UN", null, null, 999L)));
 	}
 
 	@Test
 	void listarItemsPaginadoFiltraPorCategoria() {
-		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-C1", "Harina 000", "KG", null, null, "Harinas"));
-		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-C2", "Aceite 1L", "UN", null, null, "Aceites"));
+		Categoria harinas = categoriaRepository.save(new Categoria("Harinas"));
+		Categoria aceites = categoriaRepository.save(new Categoria("Aceites"));
+		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-C1", "Harina 000", "KG", null, null, harinas.getId()));
+		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-C2", "Aceite 1L", "UN", null, null, aceites.getId()));
 
-		com.sistema.common.model.PageResponse<Item> pagina = stockService.listarItemsPaginado(null, "Harinas", 0, 20);
+		com.sistema.common.model.PageResponse<Item> pagina = stockService.listarItemsPaginado(null, harinas.getId(), 0, 20);
 
 		assertEquals(1, pagina.content().size());
 		assertEquals("SKU-C1", pagina.content().get(0).getSku());
+		assertEquals("Harinas", pagina.content().get(0).getCategoriaNombre());
 	}
 
 	@Test
-	void listarCategoriasDevuelveDistintas() {
-		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-D1", "A", "UN", null, null, "Harinas"));
-		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-D2", "B", "UN", null, null, "Harinas"));
-		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-D3", "C", "UN", null, null, "Aceites"));
+	void listarCategoriasDevuelveActivas() {
+		categoriaRepository.save(new Categoria("Harinas"));
+		categoriaRepository.save(new Categoria("Aceites"));
+		Categoria inactiva = categoriaRepository.save(new Categoria("Congelados"));
+		categoriaRepository.save(inactiva, false);
 
 		assertEquals(2, stockService.listarCategorias().size());
 		assertTrue(stockService.listarCategorias().contains("Harinas"));
 		assertTrue(stockService.listarCategorias().contains("Aceites"));
+		assertFalse(stockService.listarCategorias().contains("Congelados"));
 	}
 
 	private static class FakeItemRepository implements ItemRepository {
@@ -483,23 +501,22 @@ class StockServiceTest {
 		}
 
 		@Override
-		public PageResponse<Item> buscar(String q, String categoria, int page, int size) {
-			return paginarBusqueda(q, categoria, false, page, size);
+		public PageResponse<Item> buscar(String q, Long categoriaId, int page, int size) {
+			return paginarBusqueda(q, categoriaId, false, page, size);
 		}
 
 		@Override
-		public PageResponse<Item> buscarActivos(String q, String categoria, int page, int size) {
-			return paginarBusqueda(q, categoria, true, page, size);
+		public PageResponse<Item> buscarActivos(String q, Long categoriaId, int page, int size) {
+			return paginarBusqueda(q, categoriaId, true, page, size);
 		}
 
-		private PageResponse<Item> paginarBusqueda(String q, String categoria, boolean soloActivos, int page, int size) {
-			String cat = categoria == null || categoria.isBlank() ? null : categoria.trim();
+		private PageResponse<Item> paginarBusqueda(String q, Long categoriaId, boolean soloActivos, int page, int size) {
 			List<Item> todos = datos.values().stream()
 					.filter(i -> !soloActivos || i.isActivo())
 					.filter(i -> q == null || q.isBlank()
 							|| i.getSku().toLowerCase().contains(q.toLowerCase())
 							|| i.getNombre().toLowerCase().contains(q.toLowerCase()))
-					.filter(i -> cat == null || cat.equals(i.getCategoria()))
+					.filter(i -> categoriaId == null || categoriaId.equals(i.getCategoriaId()))
 					.toList();
 			int total = todos.size();
 			int from = Math.min(page * size, total);
@@ -507,15 +524,45 @@ class StockServiceTest {
 			int totalPages = size == 0 ? 0 : (total + size - 1) / size;
 			return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
 		}
+	}
+
+	private static class FakeCategoriaRepository implements CategoriaRepository {
+
+		private final Map<Long, Categoria> datos = new HashMap<>();
+		private final AtomicLong secuencia = new AtomicLong(1);
 
 		@Override
-		public List<String> listarCategorias() {
-			return datos.values().stream()
-					.map(Item::getCategoria)
-					.filter(c -> c != null && !c.isBlank())
-					.distinct()
-					.sorted()
-					.toList();
+		public Categoria save(Categoria categoria) {
+			if (categoria.getId() == null) {
+				categoria.setId(secuencia.getAndIncrement());
+			}
+			datos.put(categoria.getId(), categoria);
+			return categoria;
+		}
+
+		public Categoria save(Categoria categoria, boolean activo) {
+			categoria.setActivo(activo);
+			return save(categoria);
+		}
+
+		@Override
+		public Optional<Categoria> findById(Long id) {
+			return Optional.ofNullable(datos.get(id));
+		}
+
+		@Override
+		public Optional<Categoria> findByNombre(String nombre) {
+			return datos.values().stream().filter(c -> c.getNombre().equals(nombre)).findFirst();
+		}
+
+		@Override
+		public List<Categoria> findAll() {
+			return datos.values().stream().sorted(Comparator.comparing(Categoria::getNombre)).toList();
+		}
+
+		@Override
+		public List<Categoria> findByActivoTrue() {
+			return findAll().stream().filter(Categoria::isActivo).toList();
 		}
 	}
 

@@ -262,14 +262,14 @@
 - **Nota (limitación pendiente):** la tabla principal de `/stock` carga de `/api/reportes/stock` (solo ADMINISTRATIVO por SecurityConfig); un ENCARGADO_DEPOSITO recibe 403 en esa tabla. La sección de Lotes sí es accesible. Pendiente: abrir el stock por item al rol depósito.
 - **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
-### AUD-007 — Categoría de Item como texto libre (P2)
+### AUD-007 — Categoría de Item como texto libre (P2) ✅ RESUELTO
 
 - **Tipo:** deuda de modelado · **Prioridad:** P2
 - **Área:** Item / categoría
 - **Evidencia:** `V12__item_categoria.sql:1` columna string; sin tabla `categoria`; `listarCategorias` = `DISTINCT` derivado.
 - **Impacto:** sin normalización; typos crean categorías; imposible renombrar/estandarizar.
-- **AC:** convertir en entidad ABMC con `categoria_id` FK en Item.
-- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+- **Estado:** ✅ **Resuelto (corte limpio)** — migración `V17__categoria.sql` (tabla `categoria` + backfill + `item.categoria_id` FK + **DROP de `item.categoria`** sin legado). Módulo hexagonal `categoria` (CRUD + activo), `Item` pasa a `categoriaId`/`categoriaNombre`, `listarCategorias` lee la tabla. Frontend: selector por `categoriaId` en item y pedidos (preservando P1.B), gestión de categorías en `/items`. Verificado por QA: 181 backend + 8 E2E + build verde.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
 ### AUD-008 — Proveedor sin trazabilidad con Item/Lote (P2)
 
@@ -298,14 +298,22 @@
 - **AC:** unificar cálculo de disponible de lote para contemplar ajustes.
 - **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
 
-### AUD-011 — Dashboard con links genéricos/mismatch (P2)
+### AUD-011 — Dashboard con links genéricos/mismatch (P2) ✅ RESUELTO
 
 - **Tipo:** mejora · **Prioridad:** P2
 - **Área:** frontend dashboard
 - **Evidencia:** `page.tsx:180,216,238,272` — "Stock bajo"→/items, "Lotes por vencer"→/stock (ciego), re-agendados/sin-stock sin pre-seleccionar tab.
 - **Impacto:** alertas que no conducen a resolver el problema.
-- **AC:** links accionables con destino exacto (tab/filtro).
-- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+- **Estado:** ✅ **Resuelto** — links accionables con pre-filtrado: `/stock?filtro=bajo`, `/stock?tab=lotes&filtro=vencer`, `/pedidos?tab=PENDIENTE_STOCK`, `/pedidos?tab=RE_AGENDADO`; `stock/page.tsx` y `pedidos/page.tsx` leen `useSearchParams`; componente `Toast` global usado en sustitución y stock. Verificado por QA (8 E2E incluye smoke `dashboard.spec.ts`).
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
+
+### AUD-012 — Acceso al stock por ítem para ENCARGADO_DEPOSITO + comboboxes solo activos ✅ RESUELTO
+
+- **Tipo:** mejora de permisos · **Prioridad:** P2
+- **Área:** permisos / frontend comboboxes
+- **Descripción:** el rol `ENCARGADO_DEPOSITO` recibía 403 en `/stock` (la tabla carga de `/api/reportes/stock`, restringido a ADMINISTRATIVO). Además los comboboxes de creación no filtraban inactivos (pendiente del P1.A).
+- **Estado:** ✅ **Resuelto** — `SecurityConfig` abre `/reportes/stock` y `/reportes/stock/exportar.csv` a `ENCARGADO_DEPOSITO`/`ADMINISTRATIVO` (el resto de reportes sigue solo ADMIN); comboboxes de creación (pedidos, cobranzas, ordenes-compra) envían `activos=true`. Test de integración: encargado ve stock (200), repartidor no ve reportes (403).
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
 
 ---
 

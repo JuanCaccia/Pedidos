@@ -10,7 +10,7 @@ public class ItemMapper {
 		item.setActivo(entity.isActivo());
 		item.setStockMinimo(entity.getStockMinimo());
 		item.setPrecioLista(entity.getPrecioLista());
-		item.setCategoria(entity.getCategoria());
+		item.setCategoriaId(entity.getCategoriaId());
 		return item;
 	}
 
@@ -22,7 +22,7 @@ public class ItemMapper {
 		entity.setActivo(item.isActivo());
 		entity.setStockMinimo(item.getStockMinimo());
 		entity.setPrecioLista(item.getPrecioLista());
-		entity.setCategoria(item.getCategoria());
+		entity.setCategoriaId(item.getCategoriaId());
 		return entity;
 	}
 }

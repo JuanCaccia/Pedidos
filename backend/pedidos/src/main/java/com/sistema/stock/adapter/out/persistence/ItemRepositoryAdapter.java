@@ -43,18 +43,13 @@ public class ItemRepositoryAdapter implements ItemRepository {
 	}
 
 	@Override
-	public PageResponse<Item> buscar(String q, String categoria, int page, int size) {
-		return PageMapper.of(jpaRepository.buscar(normalizar(q), normalizar(categoria), PageRequest.of(page, size)), mapper::toDomain);
+	public PageResponse<Item> buscar(String q, Long categoriaId, int page, int size) {
+		return PageMapper.of(jpaRepository.buscar(normalizar(q), categoriaId, PageRequest.of(page, size)), mapper::toDomain);
 	}
 
 	@Override
-	public PageResponse<Item> buscarActivos(String q, String categoria, int page, int size) {
-		return PageMapper.of(jpaRepository.buscarActivos(normalizar(q), normalizar(categoria), PageRequest.of(page, size)), mapper::toDomain);
-	}
-
-	@Override
-	public List<String> listarCategorias() {
-		return jpaRepository.findCategorias();
+	public PageResponse<Item> buscarActivos(String q, Long categoriaId, int page, int size) {
+		return PageMapper.of(jpaRepository.buscarActivos(normalizar(q), categoriaId, PageRequest.of(page, size)), mapper::toDomain);
 	}
 
 	private String normalizar(String q) {

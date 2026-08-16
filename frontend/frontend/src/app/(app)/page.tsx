@@ -177,7 +177,7 @@ export default function DashboardPage() {
         <AlertaCard
           titulo="Stock bajo"
           enlaceLabel="Ver items"
-          enlaceHref="/items"
+          enlaceHref="/stock?filtro=bajo"
           loading={loading}
           error={error}
           onReintentar={cargarTodo}
@@ -212,7 +212,7 @@ export default function DashboardPage() {
         <AlertaCard
           titulo="Pedidos con stock pendiente"
           enlaceLabel="Ver pedidos"
-          enlaceHref="/pedidos"
+          enlaceHref="/pedidos?tab=PENDIENTE_STOCK"
           loading={loading}
           error={error}
           onReintentar={cargarTodo}
@@ -234,7 +234,7 @@ export default function DashboardPage() {
         <AlertaCard
           titulo="Lotes por vencer"
           enlaceLabel="Ver stock"
-          enlaceHref="/stock"
+          enlaceHref="/stock?tab=lotes&filtro=vencer"
           loading={loading}
           error={error}
           onReintentar={cargarTodo}
@@ -269,7 +269,7 @@ export default function DashboardPage() {
         <AlertaCard
           titulo="Pedidos re-agendados"
           enlaceLabel="Ver pedidos"
-          enlaceHref="/pedidos"
+          enlaceHref="/pedidos?tab=RE_AGENDADO"
           loading={loading}
           error={error}
           onReintentar={cargarTodo}

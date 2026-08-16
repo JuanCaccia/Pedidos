@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import type { Item, PageResponse } from "@/lib/types";
+import type { Categoria, Item, PageResponse } from "@/lib/types";
 import { formatMoney, formatNumber } from "@/lib/format";
 import ActiveBadge from "@/components/ActiveBadge";
 import Loading from "@/components/Loading";
@@ -27,7 +27,7 @@ export default function ItemsPage() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [categoriaFilter, setCategoriaFilter] = useState("");
-  const [categorias, setCategorias] = useState<string[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -36,6 +36,7 @@ export default function ItemsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [editId, setEditId] = useState<number | null>(null);
+  const [showCategorias, setShowCategorias] = useState(false);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -43,7 +44,7 @@ export default function ItemsPage() {
     try {
       const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE) });
       if (search.trim()) params.set("q", search.trim());
-      if (categoriaFilter) params.set("categoria", categoriaFilter);
+      if (categoriaFilter) params.set("categoriaId", categoriaFilter);
       const data = await apiGet<PageResponse<Item>>(`/api/items?${params.toString()}`);
       setItems(data.content);
       setTotalPages(data.totalPages);
@@ -59,7 +60,7 @@ export default function ItemsPage() {
   }, [loadItems]);
 
   useEffect(() => {
-    apiGet<string[]>("/api/items/categorias")
+    apiGet<Categoria[]>("/api/categorias")
       .then(setCategorias)
       .catch(() => {
         // El filtro de categorías mostrará solo "Todas las categorías"
@@ -82,12 +83,12 @@ export default function ItemsPage() {
     unidadMedida: string,
     stockMinimo: number | undefined,
     precioLista: number | undefined,
-    categoria: string
+    categoriaId: number | null
   ) {
     const body: Record<string, unknown> = { nombre, unidadMedida };
     if (stockMinimo !== undefined) body.stockMinimo = stockMinimo;
     if (precioLista !== undefined) body.precioLista = precioLista;
-    if (categoria.trim()) body.categoria = categoria.trim();
+    if (categoriaId != null) body.categoriaId = categoriaId;
     await apiFetch<Item>(`/api/items/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -120,14 +121,22 @@ export default function ItemsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Items</h1>
         {canGestionar && (
-          <Button
-            onClick={() => {
-              setFormError(null);
-              setShowForm(true);
-            }}
-          >
-            Nuevo item
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setShowCategorias(true)}
+            >
+              Gestionar categorías
+            </Button>
+            <Button
+              onClick={() => {
+                setFormError(null);
+                setShowForm(true);
+              }}
+            >
+              Nuevo item
+            </Button>
+          </div>
         )}
       </div>
 
@@ -149,8 +158,8 @@ export default function ItemsPage() {
         >
           <option value="">Todas las categorías</option>
           {categorias.map((c) => (
-            <option key={c} value={c}>
-              {c}
+            <option key={c.id} value={c.id}>
+              {c.nombre}
             </option>
           ))}
         </select>
@@ -188,7 +197,7 @@ export default function ItemsPage() {
                   <tr key={item.id} className="transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
                     <td className="px-4 py-3 font-mono text-neutral-700 dark:text-neutral-300">{item.sku}</td>
                     <td className="px-4 py-3 font-medium text-neutral-900 dark:text-neutral-100">{item.nombre}</td>
-                    <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{item.categoria ?? "—"}</td>
+                    <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{item.categoriaNombre ?? "—"}</td>
                     <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{item.unidadMedida}</td>
                     <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{formatNumber(item.stockMinimo)}</td>
                     <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{formatMoney(item.precioLista)}</td>
@@ -238,6 +247,7 @@ export default function ItemsPage() {
 
       {showForm && (
         <NuevoItemForm
+          categorias={categorias}
           error={formError}
           setError={setFormError}
           submitting={submitting}
@@ -253,10 +263,18 @@ export default function ItemsPage() {
       {editItem && (
         <EditarItemModal
           item={editItem}
-          onSave={async (nombre, unidadMedida, stockMinimo, precioLista, categoria) => {
-            await guardarItem(editItem.id, nombre, unidadMedida, stockMinimo, precioLista, categoria);
+          categorias={categorias}
+          onSave={async (nombre, unidadMedida, stockMinimo, precioLista, categoriaId) => {
+            await guardarItem(editItem.id, nombre, unidadMedida, stockMinimo, precioLista, categoriaId);
           }}
           onClose={() => setEditId(null)}
+        />
+      )}
+
+      {showCategorias && (
+        <GestionarCategoriasModal
+          onClose={() => setShowCategorias(false)}
+          onCambio={loadItems}
         />
       )}
     </div>
@@ -265,16 +283,18 @@ export default function ItemsPage() {
 
 function EditarItemModal({
   item,
+  categorias,
   onSave,
   onClose,
 }: {
   item: Item;
+  categorias: Categoria[];
   onSave: (
     nombre: string,
     unidadMedida: string,
     stockMinimo: number | undefined,
     precioLista: number | undefined,
-    categoria: string
+    categoriaId: number | null
   ) => Promise<void>;
   onClose: () => void;
 }) {
@@ -282,7 +302,7 @@ function EditarItemModal({
   const [unidadMedida, setUnidadMedida] = useState(item.unidadMedida);
   const [stockMinimo, setStockMinimo] = useState(String(item.stockMinimo));
   const [precioLista, setPrecioLista] = useState(String(item.precioLista));
-  const [categoria, setCategoria] = useState(item.categoria ?? "");
+  const [categoriaId, setCategoriaId] = useState<string>(item.categoriaId != null ? String(item.categoriaId) : "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -312,7 +332,7 @@ function EditarItemModal({
     }
     setSaving(true);
     try {
-      await onSave(nombre.trim(), unidadMedida.trim(), stockMinimoValue, precioListaValue, categoria.trim());
+      await onSave(nombre.trim(), unidadMedida.trim(), stockMinimoValue, precioListaValue, categoriaId ? Number(categoriaId) : null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado");
     } finally {
@@ -349,13 +369,19 @@ function EditarItemModal({
           <label htmlFor="edit-categoria" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
             Categoría
           </label>
-          <input
+          <select
             id="edit-categoria"
-            value={categoria}
-            onChange={(e) => setCategoria(e.target.value)}
+            value={categoriaId}
+            onChange={(e) => setCategoriaId(e.target.value)}
             className={INPUT_CLASS}
-            placeholder="Ej.: Harinas"
-          />
+          >
+            <option value="">Sin categoría</option>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="edit-stockMinimo" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
@@ -402,6 +428,7 @@ function EditarItemModal({
 }
 
 function NuevoItemForm({
+  categorias,
   error,
   setError,
   submitting,
@@ -409,6 +436,7 @@ function NuevoItemForm({
   onClose,
   onCreated,
 }: {
+  categorias: Categoria[];
   error: string | null;
   setError: (value: string | null) => void;
   submitting: boolean;
@@ -419,7 +447,7 @@ function NuevoItemForm({
   const [sku, setSku] = useState("");
   const [nombre, setNombre] = useState("");
   const [unidadMedida, setUnidadMedida] = useState("");
-  const [categoria, setCategoria] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
   const [stockMinimo, setStockMinimo] = useState("");
   const [precioLista, setPrecioLista] = useState("");
 
@@ -458,7 +486,7 @@ function NuevoItemForm({
         nombre: nombre.trim(),
         unidadMedida: unidadMedida.trim(),
       };
-      if (categoria.trim()) body.categoria = categoria.trim();
+      if (categoriaId) body.categoriaId = Number(categoriaId);
       if (stockMinimoValue !== undefined) body.stockMinimo = stockMinimoValue;
       if (precioListaValue !== undefined) body.precioLista = precioListaValue;
       await apiPost("/api/items", body);
@@ -513,13 +541,19 @@ function NuevoItemForm({
             <label htmlFor="categoria" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
               Categoría
             </label>
-            <input
+            <select
               id="categoria"
-              value={categoria}
-              onChange={(e) => setCategoria(e.target.value)}
+              value={categoriaId}
+              onChange={(e) => setCategoriaId(e.target.value)}
               className={INPUT_CLASS}
-              placeholder="Ej.: Harinas"
-            />
+            >
+              <option value="">Sin categoría</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="stockMinimo" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
@@ -563,6 +597,206 @@ function NuevoItemForm({
             </Button>
           </div>
         </form>
+    </Modal>
+  );
+}
+
+function GestionarCategoriasModal({
+  onClose,
+  onCambio,
+}: {
+  onClose: () => void;
+  onCambio: () => Promise<void>;
+}) {
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [nueva, setNueva] = useState("");
+  const [creando, setCreando] = useState(false);
+  const [editando, setEditando] = useState<number | null>(null);
+  const [nombreEdit, setNombreEdit] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiGet<Categoria[]>("/api/categorias?todas=true");
+      setCategorias(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function crear(e: React.FormEvent) {
+    e.preventDefault();
+    if (creando) return;
+    setError(null);
+    if (!nueva.trim()) {
+      setError("Ingresá el nombre de la categoría.");
+      return;
+    }
+    setCreando(true);
+    try {
+      await apiPost("/api/categorias", { nombre: nueva.trim() });
+      setNueva("");
+      await load();
+      await onCambio();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setCreando(false);
+    }
+  }
+
+  async function guardarEdicion(id: number) {
+    setError(null);
+    if (!nombreEdit.trim()) {
+      setError("El nombre no puede estar vacío.");
+      return;
+    }
+    try {
+      await apiFetch(`/api/categorias/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre: nombreEdit.trim() }),
+      });
+      setEditando(null);
+      await load();
+      await onCambio();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    }
+  }
+
+  async function desactivar(c: Categoria) {
+    try {
+      await apiFetch(`/api/categorias/${c.id}/desactivar`, { method: "PATCH" });
+      await load();
+      await onCambio();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    }
+  }
+
+  async function reactivar(c: Categoria) {
+    try {
+      await apiFetch(`/api/categorias/${c.id}/reactivar`, { method: "PATCH" });
+      await load();
+      await onCambio();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    }
+  }
+
+  return (
+    <Modal title="Gestionar categorías" onClose={onClose} width="lg">
+      <div className="flex flex-col gap-4">
+        <form onSubmit={crear} className="flex items-center gap-2">
+          <input
+            value={nueva}
+            onChange={(e) => setNueva(e.target.value)}
+            placeholder="Nueva categoría..."
+            className={INPUT_CLASS}
+          />
+          <Button type="submit" disabled={creando || !nueva.trim()}>
+            {creando ? "Creando..." : "Crear"}
+          </Button>
+        </form>
+
+        {error && <ErrorBox message={error} />}
+
+        {loading ? (
+          <Loading />
+        ) : categorias.length === 0 ? (
+          <p className="text-sm text-neutral-500">No hay categorías cargadas.</p>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
+                  <th className="px-4 py-3 font-medium">Nombre</th>
+                  <th className="px-4 py-3 font-medium">Estado</th>
+                  <th className="px-4 py-3 text-right font-medium">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                {categorias.map((c) => (
+                  <tr key={c.id} className="transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+                    <td className="px-4 py-3">
+                      {editando === c.id ? (
+                        <input
+                          value={nombreEdit}
+                          onChange={(e) => setNombreEdit(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              guardarEdicion(c.id);
+                            }
+                            if (e.key === "Escape") setEditando(null);
+                          }}
+                          className={INPUT_CLASS}
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="font-medium text-neutral-900 dark:text-neutral-100">{c.nombre}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <ActiveBadge activo={c.activo} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        {editando === c.id ? (
+                          <>
+                            <Button variant="secondary" onClick={() => setEditando(null)}>
+                              Cancelar
+                            </Button>
+                            <Button onClick={() => guardarEdicion(c.id)}>Guardar</Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                setError(null);
+                                setEditando(c.id);
+                                setNombreEdit(c.nombre);
+                              }}
+                            >
+                              Renombrar
+                            </Button>
+                            {c.activo ? (
+                              <button
+                                onClick={() => desactivar(c)}
+                                className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-neutral-700 dark:text-red-400 dark:hover:bg-red-950/40"
+                              >
+                                Desactivar
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => reactivar(c)}
+                                className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-neutral-700 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                              >
+                                Reactivar
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }

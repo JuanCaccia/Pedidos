@@ -76,10 +76,17 @@ export interface Item {
   id: number;
   sku: string;
   nombre: string;
-  categoria: string | null;
+  categoriaId: number | null;
+  categoriaNombre: string | null;
   unidadMedida: string;
   stockMinimo: number;
   precioLista: number;
+  activo: boolean;
+}
+
+export interface Categoria {
+  id: number;
+  nombre: string;
   activo: boolean;
 }
 

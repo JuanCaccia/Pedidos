@@ -69,6 +69,9 @@ public class PedidoService implements CrearPedido, ConfirmarPedido, GestionarEnt
 		if (!clienteGateway.existeCliente(command.clienteId())) {
 			throw new NotFoundException("Cliente no encontrado: " + command.clienteId());
 		}
+		if (!clienteGateway.clienteActivo(command.clienteId())) {
+			throw new BusinessException("CLIENTE_INACTIVO", "El cliente " + command.clienteId() + " está inactivo y no puede recibir pedidos");
+		}
 		if (!usuarioGateway.existeUsuario(command.vendedorId())) {
 			throw new NotFoundException("Usuario no encontrado: " + command.vendedorId());
 		}
@@ -87,6 +90,9 @@ public class PedidoService implements CrearPedido, ConfirmarPedido, GestionarEnt
 			}
 			if (!stockGateway.existeItem(linea.itemId())) {
 				throw new NotFoundException("Item no encontrado: " + linea.itemId());
+			}
+			if (!stockGateway.itemActivo(linea.itemId())) {
+				throw new BusinessException("ITEM_INACTIVO", "El item " + linea.itemId() + " está inactivo y no puede incluirse en un pedido");
 			}
 			pedido.agregarItem(new PedidoItem(linea.itemId(), linea.cantidad(), linea.precioUnitario()));
 		}

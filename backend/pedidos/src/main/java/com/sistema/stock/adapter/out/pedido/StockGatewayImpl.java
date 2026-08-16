@@ -3,6 +3,7 @@ package com.sistema.stock.adapter.out.pedido;
 import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
 import com.sistema.pedido.port.out.StockGateway;
+import com.sistema.stock.adapter.out.persistence.ItemJpaEntity;
 import com.sistema.stock.adapter.out.persistence.ItemJpaRepository;
 import com.sistema.stock.model.Item;
 import com.sistema.stock.model.MovimientoStock;
@@ -40,6 +41,11 @@ public class StockGatewayImpl implements StockGateway {
 	}
 
 	@Override
+	public boolean itemActivo(Long itemId) {
+		return stockService.buscarItemPorId(itemId).map(Item::isActivo).orElse(false);
+	}
+
+	@Override
 	public BigDecimal consultarDisponible(Long itemId) {
 		return stockService.obtenerDisponible(itemId);
 	}
@@ -48,8 +54,11 @@ public class StockGatewayImpl implements StockGateway {
 	@Transactional
 	public void reservar(Long itemId, Long pedidoId, BigDecimal cantidad) {
 		// Bloqueo pesimista: serializa reservas concurrentes sobre el mismo item
-		itemJpaRepository.findByIdParaActualizar(itemId)
+		ItemJpaEntity item = itemJpaRepository.findByIdParaActualizar(itemId)
 				.orElseThrow(() -> new NotFoundException("Item no encontrado: " + itemId));
+		if (!item.isActivo()) {
+			throw new BusinessException("ITEM_INACTIVO", "El item " + itemId + " está inactivo y no puede reservarse");
+		}
 		BigDecimal disponible = stockService.obtenerDisponible(itemId);
 		if (disponible.compareTo(cantidad) < 0) {
 			throw new BusinessException("STOCK_INSUFICIENTE",

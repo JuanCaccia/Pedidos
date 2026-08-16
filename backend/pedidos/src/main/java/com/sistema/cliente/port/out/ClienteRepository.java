@@ -19,4 +19,6 @@ public interface ClienteRepository {
 	List<Cliente> findByZonaId(Long zonaId);
 
 	PageResponse<Cliente> buscar(String q, Long zonaId, int page, int size);
+
+	PageResponse<Cliente> buscarActivos(String q, Long zonaId, int page, int size);
 }

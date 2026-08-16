@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -125,6 +126,67 @@ class PedidosIntegrationTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"sku\":\"A-ADMIN\",\"nombre\":\"Admin item\",\"unidadMedida\":\"UN\"}"))
 				.andExpect(status().isCreated());
+	}
+
+	@Test
+	void pedidoConItemInactivoRechazado() throws Exception {
+		String token = login();
+
+		String creado = mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"INACT-IT\",\"nombre\":\"Item a desactivar\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		Integer itemId = JsonPath.read(creado, "$.id");
+
+		mockMvc.perform(patch("/items/" + itemId + "/desactivar").header("Authorization", "Bearer " + token))
+				.andExpect(status().isNoContent());
+
+		mockMvc.perform(post("/pedidos")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"clienteId\":1,\"vendedorId\":1,\"items\":[{\"itemId\":" + itemId
+								+ ",\"cantidad\":1,\"precioUnitario\":1}]}"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("ITEM_INACTIVO"));
+	}
+
+	@Test
+	void itemInactivoNoApareceEnBusquedaDeActivos() throws Exception {
+		String token = login();
+
+		String creado = mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"BUSQ-ACT\",\"nombre\":\"Busqueda activos\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		Integer itemId = JsonPath.read(creado, "$.id");
+
+		mockMvc.perform(patch("/items/" + itemId + "/desactivar").header("Authorization", "Bearer " + token))
+				.andExpect(status().isNoContent());
+
+		// Combobox (solo activos) no lo devuelve.
+		mockMvc.perform(get("/items").param("q", "BUSQ-ACT").param("activos", "true")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements").value(0));
+
+		// ABMC maestro (todos) lo sigue mostrando para poder reactivarlo.
+		mockMvc.perform(get("/items").param("q", "BUSQ-ACT")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements").value(1));
+	}
+
+	private String login() throws Exception {
+		String login = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"admin@pedidos.com\",\"password\":\"admin123\"}"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		return JsonPath.read(login, "$.token");
 	}
 
 	@Test

@@ -148,6 +148,7 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	@Transactional
 	public MovimientoStock registrarMerma(RegistrarMermaCommand command) {
 		Item item = obtenerItemO404(command.itemId());
+		validarItemActivo(item);
 		validarCantidadPositiva(command.cantidad());
 		Lote lote = loteRepository.findById(command.loteId())
 				.orElseThrow(() -> new NotFoundException("Lote no encontrado: " + command.loteId()));
@@ -172,6 +173,7 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	@Transactional
 	public MovimientoStock ajustarInventario(AjusteInventarioCommand command) {
 		Item item = obtenerItemO404(command.itemId());
+		validarItemActivo(item);
 		if (command.cantidad() == null || command.cantidad().signum() == 0) {
 			throw new BusinessException("VALIDATION_ERROR", "La cantidad del ajuste debe ser distinta de cero");
 		}
@@ -197,6 +199,8 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		List<MovimientoStock> creados = new ArrayList<>();
 		BigDecimal restante = cantidad;
 		List<Lote> lotes = loteRepository.findByItemId(itemId).stream()
+				.filter(lote -> lote.getFechaVencimiento() == null
+						|| !lote.getFechaVencimiento().isBefore(LocalDate.now()))
 				.sorted(Comparator
 						.comparing((Lote l) -> l.getFechaVencimiento() == null ? Long.MAX_VALUE : l.getFechaVencimiento().toEpochDay())
 						.thenComparing(Lote::getFechaIngreso)
@@ -240,6 +244,11 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	@Override
 	public PageResponse<Item> listarItemsPaginado(String q, String categoria, int page, int size) {
 		return itemRepository.buscar(q, categoria, page, size);
+	}
+
+	@Override
+	public PageResponse<Item> listarItemsActivosPaginado(String q, String categoria, int page, int size) {
+		return itemRepository.buscarActivos(q, categoria, page, size);
 	}
 
 	@Override
@@ -326,6 +335,12 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	private void validarCantidadPositiva(BigDecimal cantidad) {
 		if (cantidad == null || cantidad.signum() <= 0) {
 			throw new BusinessException("VALIDATION_ERROR", "La cantidad debe ser mayor que cero");
+		}
+	}
+
+	private void validarItemActivo(Item item) {
+		if (!item.isActivo()) {
+			throw new BusinessException("ITEM_INACTIVO", "El item " + item.getId() + " está inactivo y no admite operaciones de stock");
 		}
 	}
 

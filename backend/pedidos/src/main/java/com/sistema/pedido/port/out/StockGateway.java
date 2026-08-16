@@ -7,6 +7,8 @@ public interface StockGateway {
 
 	boolean existeItem(Long itemId);
 
+	boolean itemActivo(Long itemId);
+
 	BigDecimal consultarDisponible(Long itemId);
 
 	void reservar(Long itemId, Long pedidoId, BigDecimal cantidad);

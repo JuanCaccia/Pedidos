@@ -200,6 +200,114 @@
 
 ---
 
+## AUDITORÍA FUNCIONAL — Dominio, Entidades y UX (2026-08-15)
+
+> Hallazgos de la auditoría crítica delegada a sub-agentes de exploración. Todo verificado contra código (ruta:línea). Sin fixes aún.
+
+### AUD-001 — Soft delete (`activo`) sin semántica real (P1) ✅ RESUELTO (backend) / pendiente frontend
+
+- **Tipo:** bug de negocio · **Prioridad:** P1
+- **Área:** Item / Cliente / Proveedor
+- **Evidencia:** `PedidoService.crearPedido:88-90` valida solo `existeItem` (no `activo`); `ClienteGatewayImpl:19-21` no chequea `activo`; `OrdenCompraService:51-53` y `StockService:321-324` tampoco.
+- **Problema:** items/clientes/proveedores desactivados se siguen usando en pedidos nuevos, OC, reservas y movimientos. Quedan en "limbo".
+- **Impacto:** se venden/compran items dados de baja.
+- **Estado:** ✅ **Backend resuelto** — `PedidoService.crearPedido` rechaza item/cliente inactivo (`ITEM_INACTIVO`/`CLIENTE_INACTIVO`); `OrdenCompraService` rechaza item/proveedor inactivo; `StockService.registrarMerma`/`ajustarInventario` y `StockGatewayImpl.reservar` validan item activo; capacidad `?activos=true` en items/clientes. Verificado por QA: 163 backend + 7 E2E verdes.
+- **Pendiente frontend (Bloque P1.B):** los comboboxes de creación (`pedidos/page.tsx:1018,1183`, `cobranzas/page.tsx:328,701`) aún llaman `/api/items?q=` y `/api/clientes?q=` SIN `activos=true` → siguen mostrando inactivos. Deben enviar `activos=true`.
+- **AC (restante):** frontend envía `activos=true` en comboboxes de creación.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** parcial (backend listo, frontend pendiente)
+
+### AUD-002 — FEFO no excluye lotes vencidos (P1) ✅ RESUELTO
+
+- **Tipo:** bug de negocio · **Prioridad:** P1
+- **Área:** stock / lotes
+- **Evidencia:** `StockService.egresarPorLotes:196-226` ordena por `fechaVencimiento` pero no excluye `fechaVencimiento < hoy`; por ordenarse primero, entrega vencidos.
+- **Impacto:** riesgo de despachar producto vencido.
+- **Estado:** ✅ **Resuelto** — `StockService.egresarPorLotes` filtra lotes con `fechaVencimiento < LocalDate.now()` del pool de consumo (`StockService.java:202-203`). Verificado por QA.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
+
+### AUD-003 — Cobranza sin validar pertenencia pedido↔cliente (P1 promovida) ✅ RESUELTO
+
+- **Tipo:** bug de integridad · **Prioridad:** P1
+- **Área:** cobranza
+- **Evidencia:** `CobranzaService.registrar:35-48` no valida que `pedidoId` pertenezca a `clienteId` ni que el pedido exista/esté entregado.
+- **Impacto:** estado de cuenta distorsionable; cobranza con pedido de otro cliente.
+- **Estado:** ✅ **Resuelto** — `CobranzaService.registrar` valida existencia (NotFound), pertenencia al cliente (`:67`) y estado en `{EN_VIAJE, ENTREGADO, ENTREGADO_PARCIAL}` (`:29,:71`) con `COBRANZA_PEDIDO_INVALIDO`. Verificado por QA.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
+
+### AUD-004 — Cambiar categoría en NuevoPedidoForm borra items agregados (P1)
+
+- **Tipo:** bug de UX · **Prioridad:** P1
+- **Área:** frontend pedidos
+- **Evidencia:** `pedidos/page.tsx:1250-1253` setea `itemId:null` en todas las líneas al cambiar categoría; luego `:1143` descarta silenciosamente líneas sin item.
+- **Impacto:** pedidos creados incompletos sin feedback; re-trabajo del vendedor.
+- **AC:** preservar selección al cambiar categoría (o confirmar); nunca descartar en silencio.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+
+### AUD-005 — Turno del repartidor no muestra domicilio ni paradas restantes (P1)
+
+- **Tipo:** gap operativo · **Prioridad:** P1
+- **Área:** frontend turno
+- **Evidencia:** `turno/page.tsx` `PedidoCard:559-613` muestra numero/cliente/items/total pero NO domicilio (existe en tipo `Cliente`) ni observaciones ni lista de paradas restantes.
+- **Impacto:** entregas fallidas/re-trabajo; sin planificación del recorrido.
+- **AC:** agregar domicilio + observaciones + contador/lista de paradas pendientes en PedidoCard.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+
+### AUD-006 — Stock no expone lotes vencidos/por vencer/descartados (P1)
+
+- **Tipo:** gap operativo · **Prioridad:** P1
+- **Área:** frontend stock / backend consultas
+- **Evidencia:** `stock/page.tsx:172-239` tabla sin vencimiento; `/stock/lotes/por-vencer` existe pero `LoteResponse` no expone saldo; el dashboard "Lotes por vencer" linkea a `/stock` que no lo muestra.
+- **Impacto:** encargado no detecta preventivamente qué vence; entrega de vencido / pérdida silenciosa.
+- **AC:** vista/tabla de lotes con vencimiento, estado y saldo en `/stock` + saldo por lote en el endpoint.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+
+### AUD-007 — Categoría de Item como texto libre (P2)
+
+- **Tipo:** deuda de modelado · **Prioridad:** P2
+- **Área:** Item / categoría
+- **Evidencia:** `V12__item_categoria.sql:1` columna string; sin tabla `categoria`; `listarCategorias` = `DISTINCT` derivado.
+- **Impacto:** sin normalización; typos crean categorías; imposible renombrar/estandarizar.
+- **AC:** convertir en entidad ABMC con `categoria_id` FK en Item.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+
+### AUD-008 — Proveedor sin trazabilidad con Item/Lote (P2)
+
+- **Tipo:** deuda de modelado · **Prioridad:** P2
+- **Área:** Proveedor / compra / stock
+- **Evidencia:** `ProveedorJpaEntity:9-25` sin relación JPA con item/lote; `registrarIngreso` no pasa proveedor; `lote` no tiene `proveedor_id`.
+- **Impacto:** no se responde "items por proveedor" ni "origen de stock".
+- **AC:** `proveedor_id` en ingreso/lote + consulta items/lotes por proveedor.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+
+### AUD-009 — Lote sin estado de ciclo de vida (P2)
+
+- **Tipo:** deuda de modelado · **Prioridad:** P2
+- **Área:** stock / lotes
+- **Evidencia:** `lote` sin columna `estado`; `TipoMovimiento` sin DESCARTE/VENCIDO; merma no altera estado del lote.
+- **Impacto:** no se puede marcar/cerrar un lote; agotados/vencidos siguen listados.
+- **AC:** estado de lote (VIGENTE/AGOTADO/VENCIDO/DESCARTADO) + acción descartar.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+
+### AUD-010 — Ajuste de inventario no impacta disponible de lote (P2)
+
+- **Tipo:** deuda de integridad · **Prioridad:** P2
+- **Área:** stock
+- **Evidencia:** `ajustarInventario` registra con `lote_id=null` y `disponibleDeLote` no contempla AJUSTE → incoherencia item vs lote; FEFO usa disponible de lote.
+- **Impacto:** descuentos declarados que el FEFO ignora.
+- **AC:** unificar cálculo de disponible de lote para contemplar ajustes.
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+
+### AUD-011 — Dashboard con links genéricos/mismatch (P2)
+
+- **Tipo:** mejora · **Prioridad:** P2
+- **Área:** frontend dashboard
+- **Evidencia:** `page.tsx:180,216,238,272` — "Stock bajo"→/items, "Lotes por vencer"→/stock (ciego), re-agendados/sin-stock sin pre-seleccionar tab.
+- **Impacto:** alertas que no conducen a resolver el problema.
+- **AC:** links accionables con destino exacto (tab/filtro).
+- **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** backlog
+
+---
+
 ## LIMITACIONES CONOCIDAS (no bugs)
 
 - Sin soporte offline.

@@ -105,8 +105,11 @@ public class ClienteController {
 	@GetMapping
 	public PageResponse<ClienteResponse> listar(@RequestParam(required = false) String q,
 			@RequestParam(required = false) Long zonaId,
+			@RequestParam(required = false) Boolean activos,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-		PageResponse<Cliente> pagina = consultarCliente.listarPaginado(q, zonaId, page, size);
+		PageResponse<Cliente> pagina = Boolean.TRUE.equals(activos)
+				? consultarCliente.listarActivosPaginado(q, zonaId, page, size)
+				: consultarCliente.listarPaginado(q, zonaId, page, size);
 		return new PageResponse<>(pagina.content().stream().map(ClienteResponse::from).toList(),
 				pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages());
 	}

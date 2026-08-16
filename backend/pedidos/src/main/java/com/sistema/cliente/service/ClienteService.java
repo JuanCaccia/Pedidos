@@ -93,6 +93,11 @@ public class ClienteService implements GestionarCliente, ConsultarCliente {
 		return clienteRepository.buscar(q, zonaId, page, size);
 	}
 
+	@Override
+	public PageResponse<Cliente> listarActivosPaginado(String q, Long zonaId, int page, int size) {
+		return clienteRepository.buscarActivos(q, zonaId, page, size);
+	}
+
 	private Cliente obtenerClienteO404(Long clienteId) {
 		return clienteRepository.findById(clienteId)
 				.orElseThrow(() -> new NotFoundException("Cliente no encontrado: " + clienteId));

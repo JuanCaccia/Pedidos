@@ -105,6 +105,23 @@ class ClienteServiceTest {
 		assertFalse(recargado.isActivo());
 	}
 
+	@Test
+	void listarActivosExcluyeInactivosPeroElListadoMaestroLosMuestra() {
+		Cliente activo = clienteService.crearCliente(new GestionarCliente.CrearClienteCommand(
+				"Activa S.A.", "20111111111", null, null, null, 1L));
+		Cliente inactivo = clienteService.crearCliente(new GestionarCliente.CrearClienteCommand(
+				"Inactiva S.R.L.", "20222222222", null, null, null, 1L));
+		clienteService.desactivarCliente(inactivo.getId());
+
+		PageResponse<Cliente> soloActivos = clienteService.listarActivosPaginado(null, null, 0, 20);
+		PageResponse<Cliente> todos = clienteService.listarPaginado(null, null, 0, 20);
+
+		assertEquals(1, soloActivos.content().size());
+		assertEquals(activo.getId(), soloActivos.content().get(0).getId());
+		assertEquals(2, todos.content().size());
+		assertTrue(todos.content().stream().anyMatch(c -> c.getId().equals(inactivo.getId())));
+	}
+
 	private static class FakeClienteRepository implements ClienteRepository {
 
 		private final Map<Long, Cliente> datos = new HashMap<>();
@@ -143,7 +160,17 @@ class ClienteServiceTest {
 
 		@Override
 		public PageResponse<Cliente> buscar(String q, Long zonaId, int page, int size) {
+			return paginarBusqueda(q, zonaId, false, page, size);
+		}
+
+		@Override
+		public PageResponse<Cliente> buscarActivos(String q, Long zonaId, int page, int size) {
+			return paginarBusqueda(q, zonaId, true, page, size);
+		}
+
+		private PageResponse<Cliente> paginarBusqueda(String q, Long zonaId, boolean soloActivos, int page, int size) {
 			List<Cliente> todos = datos.values().stream()
+					.filter(c -> !soloActivos || c.isActivo())
 					.filter(c -> zonaId == null || (c.getZona() != null && c.getZona().getId().equals(zonaId)))
 					.filter(c -> q == null || q.isBlank()
 							|| c.getRazonSocial().toLowerCase().contains(q.toLowerCase())

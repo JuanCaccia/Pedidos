@@ -5,6 +5,7 @@ import com.sistema.common.exception.NotFoundException;
 import com.sistema.compra.model.EstadoOrdenCompra;
 import com.sistema.compra.model.OrdenCompra;
 import com.sistema.compra.model.OrdenCompraLinea;
+import com.sistema.compra.model.Proveedor;
 import com.sistema.compra.port.in.ConsultarOrdenCompra;
 import com.sistema.compra.port.in.GestionarOrdenCompra;
 import com.sistema.compra.port.out.OrdenCompraRepository;
@@ -34,8 +35,11 @@ public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenC
 	@Override
 	@Transactional
 	public OrdenCompra crearOrdenCompra(CrearOrdenCompraCommand command) {
-		if (!proveedorRepository.findById(command.proveedorId()).isPresent()) {
-			throw new NotFoundException("Proveedor no encontrado: " + command.proveedorId());
+		Proveedor proveedor = proveedorRepository.findById(command.proveedorId())
+				.orElseThrow(() -> new NotFoundException("Proveedor no encontrado: " + command.proveedorId()));
+		if (!proveedor.isActivo()) {
+			throw new BusinessException("PROVEEDOR_INACTIVO",
+					"El proveedor " + command.proveedorId() + " está inactivo y no puede generar órdenes de compra");
 		}
 		if (command.lineas() == null || command.lineas().isEmpty()) {
 			throw new BusinessException("VALIDATION_ERROR", "La orden de compra debe tener al menos una línea");
@@ -50,6 +54,10 @@ public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenC
 			}
 			if (!stockGateway.existeItem(linea.itemId())) {
 				throw new NotFoundException("Item no encontrado: " + linea.itemId());
+			}
+			if (!stockGateway.itemActivo(linea.itemId())) {
+				throw new BusinessException("ITEM_INACTIVO",
+						"El item " + linea.itemId() + " está inactivo y no puede incluirse en una orden de compra");
 			}
 			orden.agregarLinea(new OrdenCompraLinea(linea.itemId(), linea.cantidad(), linea.precioUnitario()));
 		}

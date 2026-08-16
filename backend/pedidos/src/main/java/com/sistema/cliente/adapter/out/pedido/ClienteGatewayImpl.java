@@ -21,6 +21,13 @@ public class ClienteGatewayImpl implements ClienteGateway {
 	}
 
 	@Override
+	public boolean clienteActivo(Long clienteId) {
+		return clienteRepository.findById(clienteId)
+				.map(com.sistema.cliente.model.Cliente::isActivo)
+				.orElse(false);
+	}
+
+	@Override
 	public Optional<Long> zonaDeCliente(Long clienteId) {
 		return clienteRepository.findById(clienteId)
 				.map(c -> c.getZona() != null ? c.getZona().getId() : null);

@@ -6,5 +6,7 @@ public interface StockGateway {
 
 	boolean existeItem(Long itemId);
 
+	boolean itemActivo(Long itemId);
+
 	void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo);
 }

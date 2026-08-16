@@ -211,6 +211,64 @@ class StockServiceTest {
 	}
 
 	@Test
+	void egresoFefoNoConsumeLoteVencido() {
+		LocalDate hoy = LocalDate.now();
+		// Lote vencido (id 1) y lote válido (id 2), ambos con stock.
+		loteRepository.save(new Lote(1L, "L-VENCIDO", hoy.minusDays(60), hoy.minusDays(2), new BigDecimal("100.000")));
+		loteRepository.save(new Lote(1L, "L-VALIDO", hoy, hoy.plusDays(30), new BigDecimal("100.000")));
+		movimientoRepository.save(new MovimientoStock(TipoMovimiento.INGRESO, 1L, 1L, null, new BigDecimal("100.000"), hoy.atStartOfDay(), "i-vencido"));
+		movimientoRepository.save(new MovimientoStock(TipoMovimiento.INGRESO, 1L, 2L, null, new BigDecimal("100.000"), hoy.atStartOfDay(), "i-valido"));
+
+		stockService.egresarPorLotes(1L, 99L, new BigDecimal("150.000"));
+
+		Map<Long, BigDecimal> porLote = new HashMap<>();
+		for (MovimientoStock m : movimientoRepository.findByItemIdOrderByFechaAsc(1L)) {
+			if (m.getTipo() == TipoMovimiento.EGRESO_VENTA && m.getLoteId() != null) {
+				porLote.merge(m.getLoteId(), m.getCantidad(), BigDecimal::add);
+			}
+		}
+		assertEquals(0, porLote.getOrDefault(1L, BigDecimal.ZERO).compareTo(BigDecimal.ZERO));           // vencido -> 0
+		assertEquals(0, new BigDecimal("100.000").compareTo(porLote.getOrDefault(2L, BigDecimal.ZERO))); // válido -> 100
+		// Lo que no cubre el lote válido sale como egreso sin lote.
+		assertTrue(movimientoRepository.findByItemIdOrderByFechaAsc(1L).stream()
+				.anyMatch(m -> m.getTipo() == TipoMovimiento.EGRESO_VENTA && m.getLoteId() == null));
+	}
+
+	@Test
+	void mermaSobreItemInactivoLanzaBusinessException() {
+		Long itemId = itemConIngreso("MI", new BigDecimal("100.000"));
+		Lote lote = loteRepository.findByItemId(itemId).get(0);
+		stockService.desactivarItem(itemId);
+
+		assertThrows(BusinessException.class, () -> stockService.registrarMerma(
+				new GestionarMerma.RegistrarMermaCommand(itemId, lote.getId(), new BigDecimal("5.000"), "motivo")));
+	}
+
+	@Test
+	void ajusteSobreItemInactivoLanzaBusinessException() {
+		Long itemId = itemConIngreso("AI", new BigDecimal("100.000"));
+		stockService.desactivarItem(itemId);
+
+		assertThrows(BusinessException.class, () -> stockService.ajustarInventario(
+				new AjustarInventario.AjusteInventarioCommand(itemId, new BigDecimal("-10.000"), "ajuste", adminActor())));
+	}
+
+	@Test
+	void listarItemsActivosExcluyeInactivos() {
+		Item activo = stockService.crearItem(new GestionarItem.CrearItemCommand("ACT-1", "Activo", "UN", null, null, null));
+		Item inactivo = stockService.crearItem(new GestionarItem.CrearItemCommand("INACT-1", "Inactivo", "UN", null, null, null));
+		stockService.desactivarItem(inactivo.getId());
+
+		PageResponse<Item> soloActivos = stockService.listarItemsActivosPaginado(null, null, 0, 20);
+		PageResponse<Item> todos = stockService.listarItemsPaginado(null, null, 0, 20);
+
+		assertEquals(1, soloActivos.content().size());
+		assertEquals("ACT-1", soloActivos.content().get(0).getSku());
+		assertEquals(2, todos.content().size());
+		assertTrue(todos.content().stream().anyMatch(i -> i.getId().equals(inactivo.getId())));
+	}
+
+	@Test
 	void itemDuplicadoOInexistente() {
 		stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-X", "X", "UN", null, null, null));
 		assertThrows(BusinessException.class, () -> stockService.crearItem(
@@ -384,8 +442,18 @@ class StockServiceTest {
 
 		@Override
 		public PageResponse<Item> buscar(String q, String categoria, int page, int size) {
+			return paginarBusqueda(q, categoria, false, page, size);
+		}
+
+		@Override
+		public PageResponse<Item> buscarActivos(String q, String categoria, int page, int size) {
+			return paginarBusqueda(q, categoria, true, page, size);
+		}
+
+		private PageResponse<Item> paginarBusqueda(String q, String categoria, boolean soloActivos, int page, int size) {
 			String cat = categoria == null || categoria.isBlank() ? null : categoria.trim();
 			List<Item> todos = datos.values().stream()
+					.filter(i -> !soloActivos || i.isActivo())
 					.filter(i -> q == null || q.isBlank()
 							|| i.getSku().toLowerCase().contains(q.toLowerCase())
 							|| i.getNombre().toLowerCase().contains(q.toLowerCase()))

@@ -48,8 +48,11 @@ public class ItemController {
 	@GetMapping
 	public PageResponse<ItemResponse> listar(@RequestParam(required = false) String q,
 			@RequestParam(required = false) String categoria,
+			@RequestParam(required = false) Boolean activos,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-		PageResponse<Item> pagina = consultarStock.listarItemsPaginado(q, categoria, page, size);
+		PageResponse<Item> pagina = Boolean.TRUE.equals(activos)
+				? consultarStock.listarItemsActivosPaginado(q, categoria, page, size)
+				: consultarStock.listarItemsPaginado(q, categoria, page, size);
 		return PageMapper.of(pagina.content(), pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages(), ItemResponse::from);
 	}
 

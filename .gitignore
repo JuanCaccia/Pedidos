@@ -2,6 +2,7 @@ target/
 .idea/
 .DS_Store
 *.log
+.codegraph/
 
 # frontend
 frontend/frontend/node_modules/

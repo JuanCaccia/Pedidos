@@ -89,6 +89,23 @@ class OrdenCompraServiceTest {
 	}
 
 	@Test
+	void crearOrdenCompraConItemInactivoLanzaBusinessException() {
+		stockGateway.itemActivo = false;
+		assertThrows(BusinessException.class, () -> ordenCompraService.crearOrdenCompra(
+				new GestionarOrdenCompra.CrearOrdenCompraCommand(1L, null, List.of(
+						new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10"), new BigDecimal("50"))))));
+	}
+
+	@Test
+	void crearOrdenCompraConProveedorInactivoLanzaBusinessException() {
+		Proveedor proveedor = proveedorRepository.findById(1L).orElseThrow();
+		proveedor.desactivar();
+		proveedorRepository.save(proveedor);
+
+		assertThrows(BusinessException.class, () -> ordenCompraService.crearOrdenCompra(comandoConUnaLinea()));
+	}
+
+	@Test
 	void recepcionParcialRegistraIngresoYQuedaParcial() {
 		OrdenCompra orden = ordenCompraService.crearOrdenCompra(comandoConDosLineas());
 		Long linea1 = orden.getLineas().get(0).getId();
@@ -243,10 +260,16 @@ class OrdenCompraServiceTest {
 
 		private final List<String> ingresos = new ArrayList<>();
 		private boolean existe = true;
+		private boolean itemActivo = true;
 
 		@Override
 		public boolean existeItem(Long itemId) {
 			return existe;
+		}
+
+		@Override
+		public boolean itemActivo(Long itemId) {
+			return itemActivo;
 		}
 
 		@Override

@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,6 +43,7 @@ class PedidoServiceTest {
 	private PedidoService pedidoService;
 	private FakePedidoRepository pedidoRepository;
 	private FakeStockGateway stockGateway;
+	private boolean clienteInactivo;
 	private final List<Long> remitosGenerados = new ArrayList<>();
 	private final List<RegistroNotificacion> notificaciones = new ArrayList<>();
 	private final List<Long> admins = new ArrayList<>();
@@ -53,11 +55,17 @@ class PedidoServiceTest {
 		remitosGenerados.clear();
 		notificaciones.clear();
 		admins.clear();
+		clienteInactivo = false;
 		admins.add(99L);
 		pedidoService = new PedidoService(pedidoRepository, stockGateway, new ClienteGateway() {
 			@Override
 			public boolean existeCliente(Long clienteId) {
 				return true;
+			}
+
+			@Override
+			public boolean clienteActivo(Long clienteId) {
+				return !clienteInactivo;
 			}
 
 			@Override
@@ -145,6 +153,20 @@ class PedidoServiceTest {
 				List.of(new LineaPedidoCommand(10L, new BigDecimal("1"), new BigDecimal("5.00")))));
 
 		assertTrue(pedido.isExpress());
+	}
+
+	@Test
+	void crearPedidoConItemInactivoLanzaBusinessException() {
+		stockGateway.itemsInactivos.add(10L);
+
+		assertThrows(BusinessException.class, () -> crearPedido(10L, new BigDecimal("10.000")));
+	}
+
+	@Test
+	void crearPedidoConClienteInactivoLanzaBusinessException() {
+		clienteInactivo = true;
+
+		assertThrows(BusinessException.class, () -> crearPedido(10L, new BigDecimal("10.000")));
 	}
 
 	@Test
@@ -581,10 +603,16 @@ class PedidoServiceTest {
 		private final Map<Long, BigDecimal> disponible = new HashMap<>();
 		private final List<String> operaciones = new ArrayList<>();
 		private final Map<Long, List<Long>> lotesDisponibles = new HashMap<>();
+		private final Set<Long> itemsInactivos = new HashSet<>();
 
 		@Override
 		public boolean existeItem(Long itemId) {
 			return true;
+		}
+
+		@Override
+		public boolean itemActivo(Long itemId) {
+			return !itemsInactivos.contains(itemId);
 		}
 
 		@Override

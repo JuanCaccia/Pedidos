@@ -52,6 +52,11 @@ public class ClienteRepositoryAdapter implements ClienteRepository {
 		return PageMapper.of(jpaRepository.buscar(normalizar(q), zonaId, PageRequest.of(page, size)), mapper::toDomain);
 	}
 
+	@Override
+	public PageResponse<Cliente> buscarActivos(String q, Long zonaId, int page, int size) {
+		return PageMapper.of(jpaRepository.buscarActivos(normalizar(q), zonaId, PageRequest.of(page, size)), mapper::toDomain);
+	}
+
 	private String normalizar(String q) {
 		return q == null || q.isBlank() ? null : q.trim();
 	}

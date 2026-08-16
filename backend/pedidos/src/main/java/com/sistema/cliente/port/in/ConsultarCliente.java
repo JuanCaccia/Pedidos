@@ -17,4 +17,6 @@ public interface ConsultarCliente {
 	List<Cliente> listarPorZona(Long zonaId);
 
 	PageResponse<Cliente> listarPaginado(String q, Long zonaId, int page, int size);
+
+	PageResponse<Cliente> listarActivosPaginado(String q, Long zonaId, int page, int size);
 }

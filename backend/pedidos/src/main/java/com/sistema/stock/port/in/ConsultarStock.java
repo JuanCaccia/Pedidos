@@ -17,6 +17,10 @@ public interface ConsultarStock {
 
 	PageResponse<Item> listarItemsPaginado(String q, String categoria, int page, int size);
 
+	default PageResponse<Item> listarItemsActivosPaginado(String q, String categoria, int page, int size) {
+		return listarItemsPaginado(q, categoria, page, size);
+	}
+
 	List<String> listarCategorias();
 
 	BigDecimal obtenerDisponible(Long itemId);

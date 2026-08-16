@@ -9,7 +9,7 @@
 
 ## Status
 
-**COMPLETA / VERIFICADA — Backend 148 tests + E2E Playwright 7 tests en verde; Fase D cerrada formalmente.**
+**COMPLETA / VERIFICADA — Backend 163 tests + E2E Playwright 7 tests en verde; Fase D cerrada; Bloque P1.A de saneamiento (integridad de dominio) aplicado y verificado.**
 
 ## Milestone Objective
 
@@ -23,7 +23,7 @@ TTL de reservas, consolidación, export CSV).
 
 La mayoría de los flujos centrales **funcionan y son consistentes** entre backend y frontend
 (ciclo de pedido, consolidación, OC/recepción, cobranzas, faltantes+notificaciones, CSV,
-TTL config). Backend: **148 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
+TTL config). Backend: **163 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
 Los dos bloqueantes P1 de C8 (BUG-002 autorización, BUG-003 sustitución con diferencia
 negativa) fueron **resueltos y verificados en vivo**. Persisten como P1: BUG-004 (cierre de
 jornada con EN_VIAJE colgados) y BUG-005 (decisión de alcance "pedido express"). Además
@@ -51,12 +51,16 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 
 ## Completed
 
-* Backend F0→F6 + B1→B5 + C1→C8 implementado y compilando (132 tests verdes).
+* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (163 tests verdes).
 * Frontend Next.js 16.3 completo (login, dashboard, pedidos, stock, clientes/items/usuarios/
   proveedores, rutas+entregas, OC, cobranzas+caja, turno) — build OK.
-* Migraciones Flyway V1→V15 validadas.
+* Migraciones Flyway V1→V16 validadas.
 * Docker backend/frontend + compose local (Podman) funcionando.
-* CI (GitHub Actions) definido: backend test + frontend build.
+* CI (GitHub Actions) definido: backend test + frontend build + E2E Playwright (7 tests).
+* **Saneamiento Bloque P1.A (integridad de dominio) aplicado y verificado:**
+  - Soft delete con semántica real: item/cliente/proveedor inactivo rechazado en pedidos, OC, reservas, mermas y ajustes; capacidad `?activos=true` en comboboxes.
+  - FEFO seguro: `egresarPorLotes` excluye lotes vencidos (`fechaVencimiento < hoy`).
+  - Cobranza íntegra: valida `pedidoId ↔ clienteId` y estado en `{EN_VIAJE, ENTREGADO, ENTREGADO_PARCIAL}`.
 
 ## Partially Completed
 
@@ -135,7 +139,7 @@ completed: yes (subagente + verificación manual de bloqueantes)
 result: 2 bloqueantes (BUG-002, BUG-003) RESUELTOS y verificados + 13 hallazgos (QA-01..13) + STR
 
 Automated tests:
-- Backend: **148 tests, 0 fallos** (surefire).
+- Backend: **163 tests, 0 fallos** (surefire).
 - Frontend: **sin tests unitarios; E2E con Playwright: 7 tests verdes, estable como gate de CI** (`npm run test:e2e`).
 
 End-to-end verification:

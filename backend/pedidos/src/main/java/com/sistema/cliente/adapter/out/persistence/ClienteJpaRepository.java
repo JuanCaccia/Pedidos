@@ -17,4 +17,7 @@ public interface ClienteJpaRepository extends JpaRepository<ClienteJpaEntity, Lo
 
 	@Query("select c from ClienteJpaEntity c where (cast(:q as string) is null or lower(c.razonSocial) like lower(concat('%', cast(:q as string), '%')) or lower(c.cuit) like lower(concat('%', cast(:q as string), '%'))) and (:zonaId is null or c.zona.id = :zonaId)")
 	Page<ClienteJpaEntity> buscar(@Param("q") String q, @Param("zonaId") Long zonaId, Pageable pageable);
+
+	@Query("select c from ClienteJpaEntity c where c.activo = true and (cast(:q as string) is null or lower(c.razonSocial) like lower(concat('%', cast(:q as string), '%')) or lower(c.cuit) like lower(concat('%', cast(:q as string), '%'))) and (:zonaId is null or c.zona.id = :zonaId)")
+	Page<ClienteJpaEntity> buscarActivos(@Param("q") String q, @Param("zonaId") Long zonaId, Pageable pageable);
 }

@@ -24,6 +24,11 @@ public class StockGatewayImpl implements StockGateway {
 	}
 
 	@Override
+	public boolean itemActivo(Long itemId) {
+		return stockService.buscarItemPorId(itemId).map(com.sistema.stock.model.Item::isActivo).orElse(false);
+	}
+
+	@Override
 	public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo) {
 		registrarIngreso.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
 				itemId, codigoLote, null, cantidad, motivo));

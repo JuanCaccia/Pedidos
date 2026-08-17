@@ -42,7 +42,11 @@ role-based; see [05-seguridad.md](./05-seguridad.md) for the full matrix.
 ### Zona
 | Method | Path | Purpose | Role |
 |---|---|---|---|
-| POST | `/zonas` | Create zone | Authenticated |
+| POST | `/zonas` | Create zone | ENCARGADO_DEPOSITO, ADMIN |
+| PUT | `/zonas/{id}` | Update zone | ENCARGADO_DEPOSITO, ADMIN |
+| PATCH | `/zonas/{id}/desactivar` | Deactivate (soft) | ENCARGADO_DEPOSITO, ADMIN |
+| PATCH | `/zonas/{id}/reactivar` | Reactivate | ENCARGADO_DEPOSITO, ADMIN |
+| GET | `/zonas/{id}` | Get zone | Authenticated |
 | GET | `/zonas` | List zones | Authenticated |
 
 ### Item
@@ -58,8 +62,9 @@ role-based; see [05-seguridad.md](./05-seguridad.md) for the full matrix.
 ### Stock
 | Method | Path | Purpose | Role |
 |---|---|---|---|
-| POST | `/stock/ingresos` | Record stock receipt | ENCARGADO_DEPOSITO, ADMIN |
-| POST | `/stock/mermas` | Record wastage | ENCARGADO_DEPOSITO, ADMIN |
+| POST | `/stock/ingresos` | Record stock receipt (accepts optional `precioUnitario`) | ENCARGADO_DEPOSITO, ADMIN |
+| POST | `/stock/ingresos/csv` | Bulk CSV stock receipt (no OC) | ENCARGADO_DEPOSITO, ADMIN |
+| POST | `/stock/mermas` | Record wastage (persisted with **negative** sign) | ENCARGADO_DEPOSITO, ADMIN |
 | POST | `/stock/ajustes` | Manual adjustment | ENCARGADO_DEPOSITO, ADMIN |
 | POST | `/stock/lotes/{id}/descartar` | Discard a lot | ENCARGADO_DEPOSITO, ADMIN |
 | GET | `/stock/items/{itemId}` | Item stock snapshot | Authenticated |
@@ -99,8 +104,9 @@ role-based; see [05-seguridad.md](./05-seguridad.md) for the full matrix.
 ### OrdenCompra (Purchasing)
 | Method | Path | Purpose | Role |
 |---|---|---|---|
-| POST | `/ordenes-compra` | Create purchase order | ENCARGADO_DEPOSITO, ADMIN |
-| POST | `/ordenes-compra/{id}/recepciones` | Receive (partial/full) | ENCARGADO_DEPOSITO, ADMIN |
+| POST | `/ordenes-compra` | Create purchase order (lines carry **only item + quantity**, no price) | ENCARGADO_DEPOSITO, ADMIN |
+| POST | `/ordenes-compra/{id}/recepciones` | Receive (partial/full) — captures **required** `precioUnitario` | ENCARGADO_DEPOSITO, ADMIN |
+| POST | `/ordenes-compra/{id}/recepciones/csv` | Bulk CSV receipt linked to an OC | ENCARGADO_DEPOSITO, ADMIN |
 | POST | `/ordenes-compra/{id}/cancelar` | Cancel OC | ENCARGADO_DEPOSITO, ADMIN |
 | GET | `/ordenes-compra` | List OCs | ENCARGADO_DEPOSITO, ADMIN |
 | GET | `/ordenes-compra/{id}` | Get OC | ENCARGADO_DEPOSITO, ADMIN |
@@ -112,6 +118,8 @@ role-based; see [05-seguridad.md](./05-seguridad.md) for the full matrix.
 | PUT | `/proveedores/{id}` | Update supplier | ENCARGADO_DEPOSITO, ADMIN |
 | PATCH | `/proveedores/{id}/desactivar` | Deactivate | ENCARGADO_DEPOSITO, ADMIN |
 | PATCH | `/proveedores/{id}/reactivar` | Reactivate | ENCARGADO_DEPOSITO, ADMIN |
+| PUT | `/proveedores/{id}/items` | Set items supplied by the supplier (provision catalog) | ENCARGADO_DEPOSITO, ADMIN |
+| GET | `/proveedores/{id}/items` | List items supplied by the supplier | ENCARGADO_DEPOSITO, ADMIN |
 | GET | `/proveedores` | List | ENCARGADO_DEPOSITO, ADMIN |
 | GET | `/proveedores/{id}` | Get | ENCARGADO_DEPOSITO, ADMIN |
 
@@ -247,9 +255,42 @@ Errors are centralized by a `GlobalExceptionHandler`. Every error returns an
 | `CONSOLIDAR_CLIENTES_DISTINTOS` | Orders to consolidate have different customers |
 | `CONSOLIDAR_PRECIOS_DISTINTOS` | Orders to consolidate have different prices |
 | `OC_ESTADO_INVALIDO` | OC not in the expected state |
+| `ITEM_NO_PROVISTO_POR_PROVEEDOR` | OC line references an item not supplied by the OC's supplier |
 | `SIN_PENDIENTE_STOCK` | No pending-stock order to operate on |
 | `MISMO_ITEM` | Same item in the operation |
 | `*_DUPLICADO` | Duplicate unique value: `PROVEEDOR_CUIT`, `CLIENTE_CUIT`, `ITEM_SKU`, `USUARIO_EMAIL`, `ZONA_NOMBRE`, `CATEGORIA` |
+
+---
+
+## Importación CSV
+
+La recepción de stock puede importarse en lote desde un CSV (multipart, campo `file`).
+Hay dos endpoints:
+
+| Method | Path | Contexto |
+|---|---|---|
+| POST | `/stock/ingresos/csv` | Ingreso **sin OC** (proveedorId opcional) |
+| POST | `/ordenes-compra/{id}/recepciones/csv` | Recepción **vinculada a una OC** |
+
+### Formato
+
+- **Header por nombre** (la primera fila indica el nombre de cada columna).
+- Separador `;` o `,` (se detecta automáticamente).
+- Columnas requeridas: `sku`, `cantidad`. Opcionales: `precioUnitario`,
+  `fechaVencimiento` (ISO `yyyy-MM-dd`) y `codigoLote`.
+
+| sku | cantidad | precioUnitario | fechaVencimiento | codigoLote |
+|---|---|---|---|---|
+| HAR-000 | 50 | 1200.00 | 2027-01-15 | L-001 |
+| ACE-006 | 20 | | | |
+
+### Comportamiento
+
+- **Transaccional**: o bien se importa todo, o no se persiste nada (error `400`).
+- **Errores agregados por fila**: el `ApiError` lista los fallos por fila (p. ej.
+  SKU inexistente, cantidad no positiva, `ITEM_NO_PROVISTO_POR_PROVEEDOR` en OC).
+- En recepción con OC, `precioUnitario` se persiste en `lote.precio_unitario`
+  (obligatorio). En ingreso sin OC es opcional.
 
 ---
 

@@ -61,6 +61,7 @@ user. Paths not listed fall back to **authenticated**.
 | `/pedidos/{id}/entregas`, `/reagendar` | `REPARTIDOR`, `ADMIN` |
 | `/notificaciones/**` | `ADMIN`, `ENCARGADO_DEPOSITO` |
 | `POST /stock/*` | `ENCARGADO_DEPOSITO`, `ADMIN` |
+| `/stock/ingresos/csv`, `/ordenes-compra/{id}/recepciones/csv` | `ENCARGADO_DEPOSITO`, `ADMIN` |
 | `/rutas/**` | `REPARTIDOR`, `ADMIN` |
 | `/reportes/stock` (+ CSV) | `ENCARGADO_DEPOSITO`, `ADMIN` |
 | `/reportes/**` (rest) | `ADMIN` |
@@ -70,6 +71,9 @@ user. Paths not listed fall back to **authenticated**.
 | `/clientes`: POST/PUT/PATCH | `VENDEDOR`, `ADMIN` |
 | `POST /cobranzas` | `VENDEDOR`, `ADMIN` |
 | `/proveedores`, `/ordenes-compra/**` | `ENCARGADO_DEPOSITO`, `ADMIN` |
+| `/proveedores/{id}/items` | `ENCARGADO_DEPOSITO`, `ADMIN` |
+| `/zonas`: GET | authenticated |
+| `/zonas`: POST/PUT/PATCH | `ENCARGADO_DEPOSITO`, `ADMIN` |
 | `POST /sustituciones` | `REPARTIDOR`, `ADMIN` |
 | `/actuator/**` | `ADMIN` |
 | `POST /test/reset` | Public (`permitAll`) — **active ONLY in `dev`/`test`; NOT registered in `prod`** |

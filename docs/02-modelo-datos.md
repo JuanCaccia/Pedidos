@@ -1,6 +1,6 @@
 # Data Model
 
-> Schema is managed by **Flyway** migrations `V1 → V19` (see
+> Schema is managed by **Flyway** migrations `V1 → V22` (see
 > `backend/pedidos/src/main/resources/db/migration`). JPA is configured with
 > `ddl-auto=validate`, so the database is the source of truth and the schema
 > must always match the entities.
@@ -35,8 +35,10 @@ erDiagram
     ITEM ||--o{ ORDEN_COMPRA_LINEA : "se compra"
     ITEM ||--o{ REMITO_LINEA : "se entrega"
     ITEM ||--o{ SUSTITUCION : "original/sustituto"
+    ITEM ||--o{ PROVEEDOR_ITEM : "es provisto por"
     PROVEEDOR ||--o{ ORDEN_COMPRA : "emite compras"
     PROVEEDOR ||--o{ LOTE : "provee"
+    PROVEEDOR ||--o{ PROVEEDOR_ITEM : "provee items"
     PEDIDO ||--o{ PEDIDO_ITEM : "contiene"
     PEDIDO ||--o{ MOVIMIENTO_STOCK : "genera"
     PEDIDO ||--o{ RUTA_PEDIDO : "se asigna"
@@ -93,6 +95,11 @@ erDiagram
         varchar cuit UK
         boolean activo
     }
+    PROVEEDOR_ITEM {
+        bigint proveedor_id PK, FK
+        bigint item_id PK, FK
+        boolean activo
+    }
     PEDIDO {
         bigint id PK
         varchar numero UK
@@ -143,7 +150,6 @@ erDiagram
         bigint orden_compra_id FK
         bigint item_id FK
         numeric cantidad_pedida
-        numeric precio_unitario
     }
     LOTE {
         bigint id PK
@@ -153,6 +159,7 @@ erDiagram
         date fecha_ingreso
         date fecha_vencimiento
         numeric cantidad_ingresada
+        numeric precio_unitario
         varchar estado
     }
     REMITO {
@@ -286,6 +293,25 @@ Adds nullable `proveedor_id` (FK) to `lote` plus index (lot provenance).
 ### V19 — `lote.estado`
 Adds `estado VARCHAR(20) DEFAULT 'VIGENTE'` with
 `CHECK (estado IN ('VIGENTE','AGOTADO','VENCIDO','DESCARTADO'))`.
+
+### V20 — merma con signo negativo
+Desde este cambio las mermas se persisten con **signo negativo** (coherente con
+`EGRESO_VENTA`) y el disponible se calcula sumando algebraicamente. La migración
+normaliza las mermas históricas guardadas con signo positivo:
+`UPDATE movimiento_stock SET cantidad = -cantidad WHERE tipo = 'MERMA' AND cantidad > 0`.
+
+### V21 — `proveedor_item` (catálogo de provisión)
+Crea `proveedor_item` con **PK compuesta** `(proveedor_id, item_id)` y `activo`
+(default TRUE, permite desvincular sin borrar historial). Índice
+`idx_proveedor_item_item ON (item_id)` para consultas inversas. Backfill: los
+items que un proveedor ya recibió en un lote lo proveen de facto (protege la
+validación de OC para datos preexistentes).
+
+### V22 — precio real en `lote` y OC sin precio
+La OC ya **no** lleva precio en sus líneas: `DROP COLUMN precio_unitario` en
+`orden_compra_linea`. El precio real se captura en la recepción de OC
+(obligatorio) y en el ingreso manual de stock (opcional), persistiéndose en
+`lote.precio_unitario` (`DECIMAL(18,4)`, nullable).
 
 ---
 

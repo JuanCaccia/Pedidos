@@ -77,7 +77,7 @@ inactive for 48 hours are auto-cancelled by a background job.
 |---|---|
 | Backend | Spring Boot 4.1.0 · Java 21 · Maven (`com.jmc:pedidos`) |
 | Backend deps | Spring Data JPA, Flyway, WebMVC, Security, Validation, Actuator, springdoc-openapi 3.1.0, jjwt 0.13.0, PostgreSQL driver, Lombok |
-| Database | PostgreSQL (Flyway migrations V1→V19) |
+| Database | PostgreSQL (Flyway migrations V1→V22) |
 | Frontend | Next.js 16.3.0 · React 19.2.8 · ESLint · Playwright (E2E) |
 | Containerization | Docker Compose (`db`, `backend`, `frontend`) |
 | CI | GitHub Actions (backend tests, frontend build, E2E) |
@@ -122,7 +122,7 @@ It also seeds a couple of zones, customers and items with an initial stock lot.
 |---|---|
 | [00-overview.md](./00-overview.md) | This document — system summary, stack, local run. |
 | [01-arquitectura.md](./01-arquitectura.md) | Hexagonal architecture, package layout, ports/adapters, key flows. |
-| [02-modelo-datos.md](./02-modelo-datos.md) | Data model (migrations V1→V19), enums, entity lifecycles, soft-delete. |
+| [02-modelo-datos.md](./02-modelo-datos.md) | Data model (migrations V1→V22), enums, entity lifecycles, soft-delete. |
 | [03-api.md](./03-api.md) | REST endpoints by module, authorization, error format, payloads. |
 | [04-flujos.md](./04-flujos.md) | End-to-end flows per role. |
 | [05-seguridad.md](./05-seguridad.md) | JWT authentication and the role/route authorization matrix. |

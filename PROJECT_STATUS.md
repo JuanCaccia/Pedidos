@@ -1,6 +1,6 @@
 # Project Status — Sistema de Pedidos, Stock y Ventas
 
-> **Fecha:** 2026-08-16. **Autor:** cierre formal de milestone + cierre de Fase D (D1-D4) + cierre de Hardening de Producción.
+> **Fecha:** 2026-08-17. **Autor:** cierre formal de milestone + cierre de Fase D (D1-D4) + cierre de Hardening de Producción + 4 bloques de mejoras.
 > Este documento describe el estado **verificado real** del proyecto, no aspiraciones.
 
 ## Current Milestone
@@ -11,7 +11,7 @@
 
 ## Status
 
-**COMPLETA / VERIFICADA — Backend 204 tests + E2E Playwright 8 tests en verde; Hardening de Producción cerrado; Fase D cerrada; Bloques P1.A, P1.B, P2.A y P2.B de saneamiento aplicados y verificados.**
+**COMPLETA / VERIFICADA — Backend 254 tests + E2E Playwright 8 tests en verde; Hardening de Producción cerrado; Fase D cerrada; Bloques P1.A, P1.B, P2.A y P2.B de saneamiento aplicados y verificados; 4 bloques de mejoras de compra/stock aplicados y verificados.**
 
 ## Milestone Objective
 
@@ -25,7 +25,7 @@ TTL de reservas, consolidación, export CSV).
 
 La mayoría de los flujos centrales **funcionan y son consistentes** entre backend y frontend
 (ciclo de pedido, consolidación, OC/recepción, cobranzas, faltantes+notificaciones, CSV,
-TTL config). Backend: **204 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
+TTL config). Backend: **254 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
 Los dos bloqueantes P1 de C8 (BUG-002 autorización, BUG-003 sustitución con diferencia
 negativa) fueron **resueltos y verificados en vivo**. Persisten como P1: BUG-004 (cierre de
 jornada con EN_VIAJE colgados) y BUG-005 (decisión de alcance "pedido express"). Además
@@ -61,10 +61,10 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 
 ## Completed
 
-* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (204 tests verdes).
+* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (254 tests verdes).
 * Frontend Next.js 16.3 completo (login, dashboard, pedidos, stock, clientes/items/usuarios/
   proveedores, rutas+entregas, OC, cobranzas+caja, turno) — build OK.
-* Migraciones Flyway V1→V19 validadas.
+* Migraciones Flyway V1→V22 validadas.
 * Docker backend/frontend + compose local (Podman) funcionando.
 * CI (GitHub Actions) definido: backend test + frontend build + E2E Playwright (8 tests).
 * **Saneamiento Bloque P1.A (integridad de dominio) aplicado y verificado:**
@@ -84,6 +84,11 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
   - AUD-008: trazabilidad de proveedor en lote (`V18__lote_proveedor.sql`), recepción de OC asocia proveedor, `GET /stock/lotes?proveedorId=`.
   - AUD-009: estado de lote (`V19__lote_estado.sql` VIGENTE/AGOTADO/VENCIDO/DESCARTADO) + `POST /stock/lotes/{id}/descartar`; FEFO excluye descartados.
   - AUD-010: `disponibleDeLote` contempla `AJUSTE_INVENTARIO` por lote (ajuste con `loteId` opcional).
+- **4 bloques de mejoras de compra/stock aplicados y verificados (2026-08-17):**
+  - **Merma con signo negativo** (`V20__normalizar_merma_signo.sql` normaliza históricas) + fix asignar categoría a item en frontend + **ABMC de Zonas** (backend PUT/PATCH/GET por id + vista `/zonas` + nav; escrituras exigen ENCARGADO_DEPOSITO/ADMINISTRATIVO).
+  - **Relación proveedor↔item** (`V21__proveedor_item.sql`, catálogo de provisión): `PUT/GET /proveedores/{id}/items`, validación de OC con `ITEM_NO_PROVISTO_POR_PROVEEDOR`, auto-vinculación en recepción.
+  - **OC sin precio**: las líneas de OC llevan solo item+cantidad; el precio real se captura en la recepción (obligatorio) y en el ingreso manual (opcional), persistiendo en `lote.precio_unitario` (`V22__precio_oc_lote.sql`).
+  - **Importación CSV de recepción**: `POST /stock/ingresos/csv` (sin OC, proveedorId opcional) y `POST /ordenes-compra/{id}/recepciones/csv` (vinculada a OC); formato `sku;cantidad;precioUnitario;fechaVencimiento;codigoLote`; errores por fila (400, transaccional). Frontend: botones de importación CSV.
 - **Hardening de Producción aplicado y verificado (2026-08-16):**
   - STR-004: `listarPaginado` ordena toda consulta deterministamente (`express DESC, fechaCreacion DESC, id ASC`, null-safe); test `listarColaConfirmacionOrdenaDeterminista`.
   - STR-005: `POST /api/test/reset` (dev/test) con `TRUNCATE CASCADE` de 20 tablas + reseed; `globalSetup` en Playwright; no existe en prod (test `TestResetNoExisteEnProdTest`).
@@ -129,6 +134,7 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 * `GlobalExceptionHandler` no mapea 404/405 → 500 (QA-01). — ✅ resuelto (404/405/415 mapeados).
 * Validación anidada inconsistente entre requests (`@Valid` faltante en varios). — ✅ resuelto (STR-006).
 * Frontend usa `size=500` sin paginar en turno y alertas (riesgo a gran escala) — QA-08/QA-10.
+* Duplicación de lógica de recepción CSV entre `POST /stock/ingresos/csv` y `POST /ordenes-compra/{id}/recepciones/csv` — **refactor opcional** (unificar el pipeline de parseo+persistencia).
 * Frontend completo **sin versionar** de forma reproducible (STR-001) — P1, pendiente.
 * Sin tests frontend.
 * ROADMAP.md desactualizado (109→132 tests, V1→V11→V15, C8 no reflejado). — ✅ Hardening: ROADMAP.md actualizado a 204/8 y hitos cerrados.
@@ -136,9 +142,10 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 ## Architecture
 
 Backend hexagonal (controller → port/in → service → port/out → JPA) en Java 21 + Spring Boot
-4.1, Postgres 16 + Flyway (V1→V19), seguridad JWT + BCrypt. Módulos: usuario, cliente (zonas),
-stock (items/lotes/ledger/FEFO/mermas/ajustes/reservas), pedido (circuito PENDIENTE_*),
-ruta (despacho/asignación), compra (proveedores/OC), cobranza (remitos/cobranzas/cuenta),
+4.1, Postgres 16 + Flyway (V1→V22), seguridad JWT + BCrypt. Módulos: usuario, cliente (zonas),
+stock (items/lotes/ledger/FEFO/mermas/ajustes/reservas/CSV), pedido (circuito PENDIENTE_*),
+ruta (despacho/asignación), compra (proveedores/OC/catálogo de provisión/CSV),
+cobranza (remitos/cobranzas/cuenta),
 sustitucion, notificacion, reporte, categoria. Frontend Next.js 16.3 + Tailwind v4 + React 19, app router,
 estado local (sin lib de estado global).
 
@@ -175,7 +182,7 @@ completed: yes (subagente + verificación manual de bloqueantes)
 result: 2 bloqueantes (BUG-002, BUG-003) RESUELTOS y verificados + 13 hallazgos (QA-01..13) + STR
 
 Automated tests:
-- Backend: **204 tests, 0 fallos** (surefire) en 19 archivos.
+- Backend: **254 tests, 0 fallos** (surefire) en 22 archivos.
 - Frontend: **sin tests unitarios; E2E con Playwright: 8 tests verdes, estable como gate de CI** (`npm run test:e2e`); `globalSetup` resetea la DB (`POST /api/test/reset`) para corridas reproducibles.
 
 End-to-end verification:

@@ -95,29 +95,32 @@
 - **Evidencia:** verificado live (400) + test `sustitucionConBodyVacioDevuelve400`.
 - **Origen:** QA-05 · **Milestone:** C8 / Fase D · **Estado:** resuelto
 
-### QA-08 — Alerta "en ruta hoy" no acotada a la jornada + truncamiento size=500
+### QA-08 — Alerta "en ruta hoy" no acotada a la jornada + truncamiento size=500 ✅ RESUELTO
 
 - **Tipo:** mejora · **Prioridad:** P3 · **Área:** frontend/alertas
 - **Repro:** `pedidos/page.tsx:107` y `turno/page.tsx:172` marcan alerta si el cliente tiene cualquier pedido `EN_VIAJE`, sin filtrar por fecha; `size=500`.
 - **Esperado:** alerta solo por pedidos EN_VIAJE de la jornada actual; sin truncamiento.
 - **AC:** acotar por fecha y paginar correctamente.
-- **Origen:** QA-08 · **Milestone:** C8 · **Estado:** backlog
+- **Estado:** ✅ **Resuelto** — filtro backend `GET /pedidos?estado=EN_VIAJE&fechaJornada=YYYY-MM-DD` (usa `pedido.fechaJornada`); frontend pagina por páginas sin depender de `size=500`.
+- **Origen:** QA-08 · **Milestone:** C8 / Fase D · **Estado:** resuelto
 
-### QA-09 — Sustitución solo sobre ENTREGADO y sin UI en el turno
+### QA-09 — Sustitución solo sobre ENTREGADO y sin UI en el turno ✅ RESUELTO
 
 - **Tipo:** mejora · **Prioridad:** P2 · **Área:** sustituciones / turno
 - **Repro:** `SustitucionService` solo permite `ENTREGADO`/`ENTREGADO_PARCIAL` (EN_VIAJE → 409); el turno no expone sustituciones.
 - **Esperado:** sustitución en destino (EN_VIAJE/EN_CURSO) y ofrecida en la vista de turno.
 - **AC:** permitir sustitución en estados de viaje y exponerla en turno.
-- **Origen:** QA-09 · **Milestone:** C8 · **Estado:** backlog
+- **Estado:** ✅ **Resuelto** — `SustitucionService` acepta `ENTREGADO`/`ENTREGADO_PARCIAL`/`EN_VIAJE`; en EN_VIAJE egresa el original (FEFO) antes de ingresar el sustituto (no infla stock, `CANTIDAD_EXCEDE_RESERVA`). UI en turno via componente compartido `SustitucionModal.tsx` (listado por `cantidadReservada` en EN_VIAJE, `cantidadEntregada` en ENTREGADO).
+- **Origen:** QA-09 · **Milestone:** C8 / Fase D · **Estado:** resuelto
 
-### QA-10 — Vista Turno carga todos los pedidos (`/api/pedidos?size=500`)
+### QA-10 — Vista Turno carga todos los pedidos (`/api/pedidos?size=500`) ✅ RESUELTO
 
 - **Tipo:** mejora (escalabilidad) · **Prioridad:** P2 · **Área:** turno
 - **Repro:** `turno/page.tsx:62` pide `size=500` sin filtro; >500 pedidos → EN_VIAJE puede quedar fuera.
 - **Esperado:** cola acotada a rutas del repartidor.
 - **AC:** filtrar por ruta/repartidor/estado en backend.
-- **Origen:** QA-10 · **Milestone:** C8 · **Estado:** backlog
+- **Estado:** ✅ **Resuelto** — el turno resuelve sus pedidos con `GET /pedidos?ids=` desde `selectedRuta.pedidoIds` (los adicionales por `clienteId`); sin `size=500` global.
+- **Origen:** QA-10 · **Milestone:** C8 / Fase D · **Estado:** resuelto
 
 ### QA-11 — Login inválido devuelve 409 en vez de 401
 
@@ -318,6 +321,31 @@
 - **Descripción:** el rol `ENCARGADO_DEPOSITO` recibía 403 en `/stock` (la tabla carga de `/api/reportes/stock`, restringido a ADMINISTRATIVO). Además los comboboxes de creación no filtraban inactivos (pendiente del P1.A).
 - **Estado:** ✅ **Resuelto** — `SecurityConfig` abre `/reportes/stock` y `/reportes/stock/exportar.csv` a `ENCARGADO_DEPOSITO`/`ADMINISTRATIVO` (el resto de reportes sigue solo ADMIN); comboboxes de creación (pedidos, cobranzas, ordenes-compra) envían `activos=true`. Test de integración: encargado ve stock (200), repartidor no ve reportes (403).
 - **Origen:** auditoría funcional · **Milestone:** Saneamiento · **Estado:** resuelto
+
+---
+
+## MEJORAS RECIENTES (2026-08-17)
+
+> Features/completados de los últimos 4 bloques de mejoras, todos **verificados**
+> (254 tests backend, build frontend verde, Flyway V1→V22). No son bugs pendientes.
+
+- **Merma con signo negativo** — las mermas se persisten con signo negativo
+  (coherente con EGRESO_VENTA); migración `V20__normalizar_merma_signo.sql`
+  normaliza las históricas positivas.
+- **Fix asignar categoría a item en frontend** — al asignar/editar categoría de un
+  item se persiste correctamente desde la UI.
+- **ABMC de Zonas completo** — backend `PUT/PATCH/GET` por id + vista `/zonas` +
+  nav; escrituras exigen `ENCARGADO_DEPOSITO`/`ADMINISTRATIVO`.
+- **Relación proveedor↔item (catálogo de provisión)** — migración
+  `V21__proveedor_item.sql`; `PUT/GET /proveedores/{id}/items`; validación de OC
+  con `ITEM_NO_PROVISTO_POR_PROVEEDOR`; auto-vinculación en recepción.
+- **OC sin precio** — las líneas de OC ya solo llevan item+cantidad; el precio real
+  se captura en la recepción de OC (obligatorio) y en el ingreso manual (opcional),
+  persistiendo en `lote.precio_unitario` (migración `V22__precio_oc_lote.sql`).
+- **Importación CSV de recepción** — `POST /stock/ingresos/csv` (sin OC) y
+  `POST /ordenes-compra/{id}/recepciones/csv` (vinculada a OC); formato
+  `sku;cantidad;precioUnitario;fechaVencimiento;codigoLote`; errores por fila (400,
+  transaccional). Frontend: botones de importación CSV.
 
 ---
 

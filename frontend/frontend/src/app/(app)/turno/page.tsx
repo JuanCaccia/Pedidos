@@ -6,9 +6,12 @@ import { apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type {
   Cliente,
+  Cobranza,
   EntregaRequest,
+  FormaPago,
   PageResponse,
   Pedido,
+  Remito,
   Ruta,
   Zona,
 } from "@/lib/types";
@@ -22,6 +25,23 @@ import SustitucionModal from "@/components/SustitucionModal";
 
 const ALLOWED_ROLES = ["REPARTIDOR", "ADMINISTRATIVO"];
 
+const FORMAS_PAGO: FormaPago[] = ["EFECTIVO", "TRANSFERENCIA", "TARJETA", "OTRO"];
+
+const FORMA_PAGO_LABELS: Record<string, string> = {
+  EFECTIVO: "Efectivo",
+  TRANSFERENCIA: "Transferencia",
+  TARJETA: "Tarjeta",
+  OTRO: "Otro",
+};
+
+type Fase = "sinRuta" | "antesDeSalir" | "enViaje" | "rendicion" | "finalizada";
+
+type Accion =
+  | { tipo: "parcial"; pedidoId: number }
+  | { tipo: "cobrar"; pedidoId: number }
+  | { tipo: "sustituir"; pedidoId: number }
+  | { tipo: "rechazar"; pedidoId: number };
+
 export default function TurnoPage() {
   const { user } = useAuth();
 
@@ -31,6 +51,8 @@ export default function TurnoPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [zonas, setZonas] = useState<Zona[]>([]);
+  const [cobradoPorPedido, setCobradoPorPedido] = useState<Map<number, number>>(new Map());
+  const [remitoPedidoIds, setRemitoPedidoIds] = useState<Set<number>>(new Set());
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,14 +60,11 @@ export default function TurnoPage() {
 
   const [selectedRutaId, setSelectedRutaId] = useState<number | null>(null);
   const didAutoSelect = useRef(false);
-  const [queueIndex, setQueueIndex] = useState(0);
 
-  const [parcialOpen, setParcialOpen] = useState(false);
-  const [rechazarOpen, setRechazarOpen] = useState(false);
   const [mutating, setMutating] = useState(false);
+  const [accion, setAccion] = useState<Accion | null>(null);
   const [alertaAdicionalDismissed, setAlertaAdicionalDismissed] = useState(false);
   const [adicionales, setAdicionales] = useState<Pedido[]>([]);
-  const [sustituirOpen, setSustituirOpen] = useState(false);
 
   const repartidorId = user?.usuarioId;
 
@@ -61,19 +80,12 @@ export default function TurnoPage() {
   }, [repartidorId]);
 
   const loadRoutePedidos = useCallback(async (ids: number[]) => {
-    setLoading(true);
-    try {
-      if (ids.length === 0) {
-        setPedidos([]);
-        return;
-      }
-      const data = await apiGet<PageResponse<Pedido>>(`/api/pedidos?ids=${ids.join(",")}`);
-      setPedidos(data.content);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error inesperado");
-    } finally {
-      setLoading(false);
+    if (ids.length === 0) {
+      setPedidos([]);
+      return;
     }
+    const data = await apiGet<PageResponse<Pedido>>(`/api/pedidos?ids=${ids.join(",")}`);
+    setPedidos(data.content);
   }, []);
 
   const loadClientes = useCallback(async () => {
@@ -93,15 +105,46 @@ export default function TurnoPage() {
     }
   }, []);
 
+  const loadCobranzas = useCallback(async (pedidosRuta: Pedido[]) => {
+    const clienteIds = [...new Set(pedidosRuta.map((p) => p.clienteId))];
+    const map = new Map<number, number>();
+    await Promise.all(
+      clienteIds.map(async (cid) => {
+        try {
+          const list = await apiGet<Cobranza[]>(`/api/cobranzas?clienteId=${cid}`);
+          for (const c of list) {
+            if (c.pedidoId == null) continue;
+            map.set(c.pedidoId, (map.get(c.pedidoId) ?? 0) + c.monto);
+          }
+        } catch {
+          // El saldo es una ayuda opcional; si falla, se muestra el total
+        }
+      })
+    );
+    setCobradoPorPedido(map);
+  }, []);
+
+  const loadRemitos = useCallback(async (pedidosRuta: Pedido[]) => {
+    const withRemito = new Set<number>();
+    await Promise.all(
+      pedidosRuta.map(async (p) => {
+        try {
+          const list = await apiGet<Remito[]>(`/api/remitos?pedidoId=${p.id}`);
+          if (list.length > 0) withRemito.add(p.id);
+        } catch {
+          // Remitos son informativos; si falla, se omiten
+        }
+      })
+    );
+    setRemitoPedidoIds(withRemito);
+  }, []);
+
   const refresh = useCallback(async () => {
     setError(null);
     setSuccess(null);
-    setParcialOpen(false);
-    setRechazarOpen(false);
+    setAccion(null);
     setAlertaAdicionalDismissed(false);
-    setSustituirOpen(false);
     await loadRutas();
-    setQueueIndex(0);
   }, [loadRutas]);
 
   useEffect(() => {
@@ -135,7 +178,6 @@ export default function TurnoPage() {
     if (pick) {
       didAutoSelect.current = true;
       setSelectedRutaId(pick.id);
-      setQueueIndex(0);
     }
   }, [rutas, selectedRutaId]);
 
@@ -175,10 +217,32 @@ export default function TurnoPage() {
       .filter((p): p is Pedido => p !== undefined);
   }, [selectedRuta, pedidosById]);
 
-  const enViaje = useMemo(
-    () => routePedidos.filter((p) => p.estado === "EN_VIAJE"),
-    [routePedidos]
-  );
+  const fase = useMemo<Fase>(() => {
+    if (!selectedRuta) return "sinRuta";
+    if (selectedRuta.estado === "PLANIFICADA") return "antesDeSalir";
+    if (selectedRuta.estado === "FINALIZADA") return "finalizada";
+    const hayEnViaje = routePedidos.some((p) => p.estado === "EN_VIAJE");
+    return hayEnViaje ? "enViaje" : "rendicion";
+  }, [selectedRuta, routePedidos]);
+
+  useEffect(() => {
+    if (routePedidos.length === 0) {
+      setCobradoPorPedido(new Map());
+      return;
+    }
+    void loadCobranzas(routePedidos);
+  }, [routePedidos, loadCobranzas]);
+
+  useEffect(() => {
+    if (fase !== "rendicion") return;
+    const entregados = routePedidos.filter(
+      (p) => p.estado === "ENTREGADO" || p.estado === "ENTREGADO_PARCIAL"
+    );
+    if (entregados.length === 0) return;
+    void loadRemitos(entregados);
+  }, [fase, routePedidos, loadRemitos]);
+
+  const enViaje = useMemo(() => routePedidos.filter((p) => p.estado === "EN_VIAJE"), [routePedidos]);
 
   const entregadosCount = useMemo(
     () =>
@@ -237,17 +301,65 @@ export default function TurnoPage() {
     return map;
   }, [pedidosAdicionales]);
 
-  const current = enViaje.length > 0 ? enViaje[Math.min(queueIndex, enViaje.length - 1)] : null;
-
   const zonaNombre = selectedRuta ? zonasById.get(selectedRuta.zonaId) : undefined;
 
-  const needPicker = !loading && !selectedRutaId;
+  const accionPedido = useMemo(
+    () => (accion ? (pedidosById.get(accion.pedidoId) ?? null) : null),
+    [accion, pedidosById]
+  );
+
+  async function entregarTotal(pedido: Pedido) {
+    setMutating(true);
+    setError(null);
+    try {
+      const entregas = pedido.items.map((it) => ({
+        pedidoItemId: it.pedidoItemId,
+        cantidadEntregada: it.cantidadReservada,
+      }));
+      await apiPost<Pedido>(`/api/pedidos/${pedido.id}/entregas`, {
+        entregas,
+      } satisfies EntregaRequest);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function reagendar(pedido: Pedido) {
+    setMutating(true);
+    setError(null);
+    try {
+      await apiPost<Pedido>(`/api/pedidos/${pedido.id}/reagendar`);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function cerrarJornada() {
+    if (!selectedRuta) return;
+    setMutating(true);
+    setError(null);
+    try {
+      await apiPost<Ruta>(`/api/rutas/${selectedRuta.id}/cerrar`);
+      await refresh();
+      setSuccess("Jornada cerrada");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setMutating(false);
+    }
+  }
 
   if (!canView) {
     return (
       <div className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col items-center justify-center gap-4 px-4">
         <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-          Mis entregas del día
+          Mi Jornada
         </h1>
         <p className="text-center text-sm text-neutral-500">
           Esta vista es solo para usuarios repartidor o administrativo.
@@ -260,10 +372,10 @@ export default function TurnoPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 pb-52 pt-4 sm:pt-8">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 pb-40 pt-4 sm:pt-8">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Mis entregas</h1>
-        <p className="text-sm text-neutral-500">Entregas del día, una por una.</p>
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Mi Jornada</h1>
+        <p className="text-sm text-neutral-500">Flujo de entrega del día, paso a paso.</p>
       </div>
 
       {error && <ErrorBox message={error} />}
@@ -277,155 +389,32 @@ export default function TurnoPage() {
       )}
 
       {loading ? (
-        <Loading label="Cargando turno..." />
-      ) : needPicker ? (
-        <RoutePicker rutas={rutas} onSelect={(id) => setSelectedRutaId(id)} />
-      ) : selectedRuta ? (
+        <Loading label="Cargando tu jornada..." />
+      ) : fase === "sinRuta" || !selectedRuta ? (
+        <SinRuta />
+      ) : (
         <>
+          <WizardSteps fase={fase} />
           <TurnoHeader
             ruta={selectedRuta}
             zonaNombre={zonaNombre}
             entregados={entregadosCount}
-            enRuta={enViaje.length}
             total={routePedidos.length}
           />
 
-          {selectedRuta.estado === "PLANIFICADA" && (
-            <div className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                Esta ruta aún no inició. Cuando estés listo, iniciá la jornada para
-                empezar a entregar.
-              </p>
-              <Button
-                className="h-14 py-4 text-base"
-                disabled={mutating}
-                onClick={async () => {
-                  if (!selectedRuta) return;
-                  setMutating(true);
-                  setError(null);
-                  try {
-                    await apiPost<Ruta>(`/api/rutas/${selectedRuta.id}/iniciar`);
-                    didAutoSelect.current = true;
-                    await refresh();
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : "Error inesperado");
-                  } finally {
-                    setMutating(false);
-                  }
-                }}
-              >
-                {mutating ? "Iniciando..." : "Iniciar jornada"}
-              </Button>
-            </div>
-          )}
-
-          {selectedRuta.estado === "EN_CURSO" && (
-            <>
-              {pedidosAdicionalesPorCliente.size > 0 && !alertaAdicionalDismissed && (
-                <div className="flex flex-col gap-2 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/40">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      {[...pedidosAdicionalesPorCliente.entries()].map(([clienteId, adicionales]) => (
-                        <p
-                          key={clienteId}
-                          className="text-sm text-blue-800 dark:text-blue-300"
-                        >
-                          {clientesById.get(clienteId)?.razonSocial ?? `Cliente #${clienteId}`}{" "}
-                          tiene un pedido adicional cargado hoy:{" "}
-                          {adicionales.map((p) => p.numero).join(", ")}
-                        </p>
-                      ))}
-                      <p className="text-xs text-blue-600 dark:text-blue-400">
-                        No es entregable en esta ruta; coordiná el envío por separado.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setAlertaAdicionalDismissed(true)}
-                      aria-label="Descartar alerta de pedidos adicionales"
-                      className="shrink-0 rounded-md p-1.5 text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-900/40"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )}
-              {current ? (
-                <>
-                  <PedidoCard
-                    pedido={current}
-                    cliente={clientesById.get(current.clienteId)}
-                    clienteNombre={clientesById.get(current.clienteId)?.razonSocial}
-                    posicion={enViaje.indexOf(current) + 1}
-                    total={enViaje.length}
-                    paradasRestantes={enViaje
-                      .slice(queueIndex + 1)
-                      .map((p) => ({
-                        numero: p.numero,
-                        clienteNombre:
-                          clientesById.get(p.clienteId)?.razonSocial ??
-                          `Cliente #${p.clienteId}`,
-                      }))}
-                  />
-
-                  {queueIndex < enViaje.length - 1 && (
-                    <Button
-                      variant="secondary"
-                      className="h-14 py-4 text-base"
-                      onClick={() => setQueueIndex((i) => i + 1)}
-                    >
-                      Siguiente
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <div className="flex flex-col items-center gap-3 rounded-xl border border-neutral-200 bg-white p-8 text-center dark:border-neutral-800 dark:bg-neutral-900">
-                  <p className="text-base font-medium text-neutral-900 dark:text-neutral-100">
-                    ¡Ruta entregada!
-                  </p>
-                  <p className="text-sm text-neutral-500">
-                    No quedan pedidos en viaje. Cerrá la jornada para finalizar.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-
-          {selectedRuta.estado === "FINALIZADA" && (
-            <div className="rounded-xl border border-neutral-200 bg-white p-6 text-center dark:border-neutral-800 dark:bg-neutral-900">
-              <p className="text-base font-medium text-neutral-900 dark:text-neutral-100">
-                Jornada finalizada
-              </p>
-            </div>
-          )}
-
-          {selectedRuta.estado === "EN_CURSO" && (
-            <BottomActionBar
-              disabled={!current || mutating}
+          {fase === "antesDeSalir" && (
+            <AntesDeSalir
+              ruta={selectedRuta}
+              repartidorEmail={user?.email}
+              pedidos={routePedidos}
               mutating={mutating}
-              onEntregarTotal={async () => {
-                if (!current) return;
+              onIniciar={async () => {
+                if (!selectedRuta) return;
                 setMutating(true);
                 setError(null);
                 try {
-                  const entregas = current.items.map((it) => ({
-                    pedidoItemId: it.pedidoItemId,
-                    cantidadEntregada: it.cantidadReservada,
-                  }));
-                  await apiPost<Pedido>(`/api/pedidos/${current.id}/entregas`, {
-                    entregas,
-                  } satisfies EntregaRequest);
+                  await apiPost<Ruta>(`/api/rutas/${selectedRuta.id}/iniciar`);
+                  didAutoSelect.current = true;
                   await refresh();
                 } catch (err) {
                   setError(err instanceof Error ? err.message : "Error inesperado");
@@ -433,76 +422,58 @@ export default function TurnoPage() {
                   setMutating(false);
                 }
               }}
-              onEntregarParcial={() => {
-                if (!current) return;
-                setError(null);
-                setParcialOpen(true);
-              }}
-              onReagendar={async () => {
-                if (!current) return;
-                setMutating(true);
-                setError(null);
-                try {
-                  await apiPost<Pedido>(`/api/pedidos/${current.id}/reagendar`);
-                  await refresh();
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Error inesperado");
-                } finally {
-                  setMutating(false);
-                }
-              }}
-              onSustituir={() => {
-                if (!current) return;
-                setError(null);
-                setSustituirOpen(true);
-              }}
-              onRechazar={() => {
-                if (!current) return;
-                setError(null);
-                setRechazarOpen(true);
-              }}
-              onCerrar={
-                enViaje.length === 0
-                  ? async () => {
-                      if (!selectedRuta) return;
-                      setMutating(true);
-                      setError(null);
-                      try {
-                        await apiPost<Ruta>(`/api/rutas/${selectedRuta.id}/cerrar`);
-                        await refresh();
-                        setSuccess("Jornada cerrada");
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : "Error inesperado");
-                      } finally {
-                        setMutating(false);
-                      }
-                    }
-                  : undefined
-              }
             />
           )}
+
+          {fase === "enViaje" && (
+            <EnViaje
+              pedidos={routePedidos}
+              clientesById={clientesById}
+              cobradoPorPedido={cobradoPorPedido}
+              pedidosAdicionalesPorCliente={
+                alertaAdicionalDismissed
+                  ? new Map()
+                  : pedidosAdicionalesPorCliente
+              }
+              onDescartarAdicionales={() => setAlertaAdicionalDismissed(true)}
+              onEntregarTotal={entregarTotal}
+              onReagendar={reagendar}
+              onAccion={setAccion}
+              mutating={mutating}
+            />
+          )}
+
+          {fase === "rendicion" && (
+            <Rendicion
+              ruta={selectedRuta}
+              pedidos={routePedidos}
+              cobradoPorPedido={cobradoPorPedido}
+              remitoPedidoIds={remitoPedidoIds}
+              mutating={mutating}
+              onCerrar={cerrarJornada}
+              onCobrar={(id) => setAccion({ tipo: "cobrar", pedidoId: id })}
+            />
+          )}
+
+          {fase === "finalizada" && <Finalizada ruta={selectedRuta} />}
         </>
-      ) : (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-neutral-200 bg-white p-8 text-center dark:border-neutral-800 dark:bg-neutral-900">
-          <p className="text-sm text-neutral-500">No tenés rutas asignadas.</p>
-        </div>
       )}
 
-      {parcialOpen && current && (
+      {accion && accionPedido && accion.tipo === "parcial" && (
         <ParcialSheet
-          pedido={current}
-          onCancel={() => setParcialOpen(false)}
+          pedido={accionPedido}
+          onCancel={() => setAccion(null)}
           onRegister={async (cantidades) => {
             setMutating(true);
             setError(null);
             try {
-              const entregas = current.items
+              const entregas = accionPedido.items
                 .filter((it) => (cantidades[it.pedidoItemId] ?? 0) > 0)
                 .map((it) => ({
                   pedidoItemId: it.pedidoItemId,
                   cantidadEntregada: cantidades[it.pedidoItemId] ?? 0,
                 }));
-              await apiPost<Pedido>(`/api/pedidos/${current.id}/entregas`, {
+              await apiPost<Pedido>(`/api/pedidos/${accionPedido.id}/entregas`, {
                 entregas,
               } satisfies EntregaRequest);
               await refresh();
@@ -516,17 +487,21 @@ export default function TurnoPage() {
         />
       )}
 
-      {rechazarOpen && current && (
-        <ConfirmacionFrictionada
-          title="Rechazar pedido"
-          descripcion={`Confirmá el rechazo del pedido ${current.numero}. Esta acción no se puede deshacer.`}
-          palabra="RECHAZAR"
-          confirmLabel="Rechazar pedido"
-          onConfirm={async () => {
+      {accion && accionPedido && accion.tipo === "cobrar" && (
+        <CobranzaSheet
+          pedido={accionPedido}
+          cobrado={cobradoPorPedido.get(accionPedido.id) ?? 0}
+          onCancel={() => setAccion(null)}
+          onRegister={async (monto, formaPago) => {
             setMutating(true);
             setError(null);
             try {
-              await apiPost<void>(`/api/pedidos/${current.id}/rechazar`);
+              await apiPost<Cobranza>("/api/cobranzas", {
+                clienteId: accionPedido.clienteId,
+                pedidoId: accionPedido.id,
+                monto,
+                formaPago,
+              });
               await refresh();
             } catch (err) {
               setError(err instanceof Error ? err.message : "Error inesperado");
@@ -535,53 +510,92 @@ export default function TurnoPage() {
               setMutating(false);
             }
           }}
-          onClose={() => setRechazarOpen(false)}
         />
       )}
 
-      {sustituirOpen && current && (
+      {accion && accionPedido && accion.tipo === "sustituir" && (
         <SustitucionModal
-          pedido={current}
-          onClose={() => setSustituirOpen(false)}
+          pedido={accionPedido}
+          onClose={() => setAccion(null)}
           onConfirm={async () => {
-            setSustituirOpen(false);
+            setAccion(null);
             await refresh();
           }}
+        />
+      )}
+
+      {accion && accionPedido && accion.tipo === "rechazar" && (
+        <ConfirmacionFrictionada
+          title="Rechazar pedido"
+          descripcion={`Confirmá el rechazo del pedido ${accionPedido.numero}. Esta acción no se puede deshacer.`}
+          palabra="RECHAZAR"
+          confirmLabel="Rechazar pedido"
+          onConfirm={async () => {
+            setMutating(true);
+            setError(null);
+            try {
+              await apiPost<void>(`/api/pedidos/${accionPedido.id}/rechazar`);
+              await refresh();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Error inesperado");
+              throw err;
+            } finally {
+              setMutating(false);
+            }
+          }}
+          onClose={() => setAccion(null)}
         />
       )}
     </div>
   );
 }
 
-function RoutePicker({
-  rutas,
-  onSelect,
-}: {
-  rutas: Ruta[];
-  onSelect: (id: number) => void;
-}) {
+function SinRuta() {
   return (
-    <div className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-        Elegí tu ruta
-      </h2>
-      {rutas.length === 0 && (
-        <p className="text-sm text-neutral-500">No tenés rutas asignadas.</p>
-      )}
-      {rutas.map((ruta) => (
-        <button
-          key={ruta.id}
-          type="button"
-          onClick={() => onSelect(ruta.id)}
-          className="flex h-16 items-center justify-between rounded-xl border border-neutral-200 bg-white px-5 py-4 text-left transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:bg-neutral-800/50"
-        >
-          <span className="font-medium text-neutral-900 dark:text-neutral-100">
-            Ruta #{ruta.id}
-          </span>
-          <span className="text-sm text-neutral-500">{formatDate(ruta.fechaJornada)}</span>
-        </button>
-      ))}
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-neutral-200 bg-white p-8 text-center dark:border-neutral-800 dark:bg-neutral-900">
+      <p className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+        No tenés una ruta asignada hoy
+      </p>
+      <p className="text-sm text-neutral-500">
+        Cuando el encargado te asigne una ruta, la vas a ver acá para iniciar tu jornada.
+      </p>
+      <Link href="/" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+        Volver al panel
+      </Link>
     </div>
+  );
+}
+
+function WizardSteps({ fase }: { fase: Fase }) {
+  const pasos: { key: Fase; label: string }[] = [
+    { key: "antesDeSalir", label: "Antes de salir" },
+    { key: "enViaje", label: "En viaje" },
+    { key: "rendicion", label: "Rendición" },
+  ];
+  const activo = fase === "antesDeSalir" ? 0 : fase === "enViaje" ? 1 : 2;
+  return (
+    <ol className="flex items-center gap-1">
+      {pasos.map((paso, i) => {
+        const completado = i < activo;
+        const esActivo = i === activo;
+        return (
+          <li key={paso.key} className="flex flex-1 items-center gap-1">
+            <div
+              className={`flex flex-1 items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold ${
+                esActivo
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                  : completado
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    : "bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500"
+              }`}
+            >
+              <span>{completado ? "✓" : `${i + 1}.`}</span>
+              <span className="truncate">{paso.label}</span>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -589,13 +603,11 @@ function TurnoHeader({
   ruta,
   zonaNombre,
   entregados,
-  enRuta,
   total,
 }: {
   ruta: Ruta;
   zonaNombre: string | undefined;
   entregados: number;
-  enRuta: number;
   total: number;
 }) {
   return (
@@ -610,7 +622,7 @@ function TurnoHeader({
           </span>
         </div>
         <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-          {entregados} entregados / {enRuta} en ruta
+          {entregados}/{total} entregados
         </span>
       </div>
       {total > 0 && (
@@ -625,32 +637,192 @@ function TurnoHeader({
   );
 }
 
-function PedidoCard({
+function AntesDeSalir({
+  ruta,
+  repartidorEmail,
+  pedidos,
+  mutating,
+  onIniciar,
+}: {
+  ruta: Ruta;
+  repartidorEmail: string | undefined;
+  pedidos: Pedido[];
+  mutating: boolean;
+  onIniciar: () => Promise<void>;
+}) {
+  const totalBultos = pedidos.reduce(
+    (sum, p) => sum + p.items.reduce((s, it) => s + it.cantidadReservada, 0),
+    0
+  );
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
+          Tu ruta asignada
+        </h2>
+        <p className="text-sm text-neutral-500">
+          Revisá el detalle y, cuando estés listo, iniciá la jornada.
+        </p>
+      </div>
+
+      <dl className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-800">
+        <div className="flex items-center justify-between gap-3 py-2.5">
+          <dt className="text-sm text-neutral-500">Repartidor</dt>
+          <dd className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+            {repartidorEmail ?? `Repartidor #${ruta.repartidorId}`}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-3 py-2.5">
+          <dt className="text-sm text-neutral-500">Fecha de jornada</dt>
+          <dd className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+            {formatDate(ruta.fechaJornada)}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-3 py-2.5">
+          <dt className="text-sm text-neutral-500">Pedidos</dt>
+          <dd className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+            {pedidos.length}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-3 py-2.5">
+          <dt className="text-sm text-neutral-500">Bultos a transportar</dt>
+          <dd className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+            {formatNumber(totalBultos)} / {formatNumber(ruta.capacidadBultos)}
+          </dd>
+        </div>
+      </dl>
+
+      <SwipeButton label="Deslizar para iniciar jornada" onConfirm={onIniciar} disabled={mutating} />
+      <Button className="h-14 py-4 text-base" disabled={mutating} onClick={() => void onIniciar()}>
+        {mutating ? "Iniciando..." : "Iniciar Jornada"}
+      </Button>
+    </div>
+  );
+}
+
+function EnViaje({
+  pedidos,
+  clientesById,
+  cobradoPorPedido,
+  pedidosAdicionalesPorCliente,
+  onDescartarAdicionales,
+  onEntregarTotal,
+  onReagendar,
+  onAccion,
+  mutating,
+}: {
+  pedidos: Pedido[];
+  clientesById: Map<number, Cliente>;
+  cobradoPorPedido: Map<number, number>;
+  pedidosAdicionalesPorCliente: Map<number, Pedido[]>;
+  onDescartarAdicionales: () => void;
+  onEntregarTotal: (pedido: Pedido) => Promise<void>;
+  onReagendar: (pedido: Pedido) => Promise<void>;
+  onAccion: (accion: Accion) => void;
+  mutating: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {pedidosAdicionalesPorCliente.size > 0 && (
+        <div className="flex flex-col gap-2 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/40">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-1.5">
+              {[...pedidosAdicionalesPorCliente.entries()].map(([clienteId, adicionales]) => (
+                <p key={clienteId} className="text-sm text-blue-800 dark:text-blue-300">
+                  {clientesById.get(clienteId)?.razonSocial ?? `Cliente #${clienteId}`} tiene un
+                  pedido adicional cargado hoy:{" "}
+                  {adicionales.map((p) => p.numero).join(", ")}
+                </p>
+              ))}
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                No es entregable en esta ruta; coordiná el envío por separado.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onDescartarAdicionales}
+              aria-label="Descartar alerta de pedidos adicionales"
+              className="shrink-0 rounded-md p-1.5 text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-900/40"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3">
+        {pedidos.map((pedido, i) => (
+          <StopCard
+            key={pedido.id}
+            pedido={pedido}
+            cliente={clientesById.get(pedido.clienteId)}
+            posicion={i + 1}
+            total={pedidos.length}
+            cobrado={cobradoPorPedido.get(pedido.id) ?? 0}
+            mutating={mutating}
+            onEntregarTotal={() => onEntregarTotal(pedido)}
+            onReagendar={() => onReagendar(pedido)}
+            onAccion={onAccion}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StopCard({
   pedido,
   cliente,
-  clienteNombre,
   posicion,
   total,
-  paradasRestantes,
+  cobrado,
+  mutating,
+  onEntregarTotal,
+  onReagendar,
+  onAccion,
 }: {
   pedido: Pedido;
   cliente: Cliente | undefined;
-  clienteNombre: string | undefined;
   posicion: number;
   total: number;
-  paradasRestantes: { numero: string; clienteNombre: string }[];
+  cobrado: number;
+  mutating: boolean;
+  onEntregarTotal: () => Promise<void>;
+  onReagendar: () => Promise<void>;
+  onAccion: (accion: Accion) => void;
 }) {
   const domicilio = cliente?.domicilio?.trim();
+  const esEnViaje = pedido.estado === "EN_VIAJE";
+  const saldo = Math.max(0, pedido.total - cobrado);
+  const cobradoTotal = cobrado > 0;
+  const puedeCobrar = esEnViaje || pedido.estado === "ENTREGADO" || pedido.estado === "ENTREGADO_PARCIAL";
+
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+    <article className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col">
           <span className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
             {pedido.numero}
           </span>
           <span className="text-base text-neutral-600 dark:text-neutral-300">
-            {clienteNombre ?? `Cliente #${pedido.clienteId}`}
+            {cliente?.razonSocial ?? `Cliente #${pedido.clienteId}`}
           </span>
+          {cliente?.telefono?.trim() && (
+            <span className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">
+              📞 {cliente.telefono.trim()}
+            </span>
+          )}
           {domicilio ? (
             <span className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
               📍 {domicilio}
@@ -661,9 +833,12 @@ function PedidoCard({
             </span>
           )}
         </div>
-        <span className="shrink-0 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
-          {posicion} / {total}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+            {posicion} / {total}
+          </span>
+          <EstadoMini estado={pedido.estado} />
+        </div>
       </div>
 
       {pedido.observaciones?.trim() ? (
@@ -683,8 +858,8 @@ function PedidoCard({
                 Item #{it.itemId}
               </span>
               <span className="text-xs text-neutral-500">
-                Reservado: {formatNumber(it.cantidadReservada)} · Entregado:{" "}
-                {formatNumber(it.cantidadEntregada)}
+                Entregado: {formatNumber(it.cantidadEntregada)} de{" "}
+                {formatNumber(it.cantidadReservada)}
               </span>
             </div>
             <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
@@ -694,117 +869,230 @@ function PedidoCard({
         ))}
       </ul>
 
-      <div className="flex items-center justify-between border-t border-neutral-200 pt-4 dark:border-neutral-800">
-        <span className="text-sm font-medium text-neutral-500">Total</span>
-        <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100">
-          {formatMoney(pedido.total)}
-        </span>
+      <div className="flex flex-col gap-1 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-neutral-500">Total a cobrar</span>
+          <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100">
+            {formatMoney(pedido.total)}
+          </span>
+        </div>
+        {cobradoTotal && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-neutral-500">Cobrado</span>
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">
+              {formatMoney(cobrado)}
+            </span>
+          </div>
+        )}
+        {cobradoTotal && saldo > 0 && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-neutral-500">Saldo</span>
+            <span className="font-semibold text-amber-600 dark:text-amber-400">
+              {formatMoney(saldo)}
+            </span>
+          </div>
+        )}
       </div>
 
-      {paradasRestantes.length > 0 && (
-        <div className="border-t border-neutral-200 pt-4 dark:border-neutral-800">
-          <p className="mb-2 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
-            Próximas paradas ({paradasRestantes.length})
-          </p>
-          <ol className="flex flex-col gap-1.5">
-            {paradasRestantes.map((p, i) => (
-              <li key={p.numero} className="flex items-center justify-between gap-3 text-sm">
-                <span className="flex items-center gap-2 text-neutral-600 dark:text-neutral-300">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
-                    {posicion + i + 1}
-                  </span>
-                  <span className="truncate">{p.clienteNombre}</span>
-                </span>
-                <span className="shrink-0 font-medium text-neutral-500 dark:text-neutral-400">
-                  {p.numero}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BottomActionBar({
-  disabled,
-  mutating,
-  onEntregarTotal,
-  onEntregarParcial,
-  onReagendar,
-  onSustituir,
-  onRechazar,
-  onCerrar,
-}: {
-  disabled: boolean;
-  mutating: boolean;
-  onEntregarTotal: () => void | Promise<void>;
-  onEntregarParcial: () => void;
-  onReagendar: () => void | Promise<void>;
-  onSustituir: () => void;
-  onRechazar: () => void;
-  onCerrar?: () => void | Promise<void>;
-}) {
-  if (onCerrar) {
-    return (
-      <div className="fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-white/95 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
-        <div className="mx-auto w-full max-w-md px-4 py-4 pb-[env(safe-area-inset-bottom)]">
-          <Button
-            className="h-16 w-full py-4 text-base"
+      {esEnViaje ? (
+        <div className="flex flex-col gap-3">
+          <SwipeButton
+            label="Deslizar para entregar total"
+            onConfirm={onEntregarTotal}
             disabled={mutating}
-            onClick={() => void onCerrar()}
-          >
-            {mutating ? "Cerrando..." : "Cerrar jornada"}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-white/95 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-3 px-4 py-4 pb-[env(safe-area-inset-bottom)]">
-        <SwipeButton
-          label="Deslizar para entregar total"
-          onConfirm={onEntregarTotal}
-          disabled={disabled || mutating}
-        />
-        <div className="grid grid-cols-4 gap-2">
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="secondary"
+              className="h-12 py-2 text-sm"
+              disabled={mutating}
+              onClick={() => onAccion({ tipo: "parcial", pedidoId: pedido.id })}
+            >
+              Entrega parcial
+            </Button>
+            <Button
+              variant="secondary"
+              className="h-12 py-2 text-sm"
+              disabled={mutating}
+              onClick={() => onAccion({ tipo: "cobrar", pedidoId: pedido.id })}
+            >
+              Cobrar
+            </Button>
+            <Button
+              variant="secondary"
+              className="h-12 py-2 text-sm"
+              disabled={mutating}
+              onClick={() => onAccion({ tipo: "sustituir", pedidoId: pedido.id })}
+            >
+              Sustituir
+            </Button>
+            <Button
+              variant="secondary"
+              className="h-12 py-2 text-sm"
+              disabled={mutating}
+              onClick={() => void onReagendar()}
+            >
+              Re-agendar
+            </Button>
+          </div>
           <Button
             variant="secondary"
-            className="h-14 py-4 text-sm"
-            disabled={disabled || mutating}
-            onClick={onEntregarParcial}
-          >
-            Entrega parcial
-          </Button>
-          <Button
-            variant="secondary"
-            className="h-14 py-4 text-sm"
-            disabled={disabled || mutating}
-            onClick={() => void onReagendar()}
-          >
-            Re-agendar
-          </Button>
-          <Button
-            variant="secondary"
-            className="h-14 py-4 text-sm"
-            disabled={disabled || mutating}
-            onClick={onSustituir}
-          >
-            Sustituir
-          </Button>
-          <Button
-            variant="secondary"
-            className="h-14 py-4 text-sm text-red-600 dark:text-red-400"
-            disabled={disabled || mutating}
-            onClick={onRechazar}
+            className="h-12 w-full py-2 text-sm text-red-600 dark:text-red-400"
+            disabled={mutating}
+            onClick={() => onAccion({ tipo: "rechazar", pedidoId: pedido.id })}
           >
             Rechazar
           </Button>
         </div>
+      ) : (
+        puedeCobrar && (
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="secondary"
+              className="h-12 w-full py-2 text-sm"
+              disabled={mutating || saldo <= 0}
+              onClick={() => onAccion({ tipo: "cobrar", pedidoId: pedido.id })}
+            >
+              {cobradoTotal ? "Asentar cobro pendiente" : "Cobrar"}
+            </Button>
+            <Button
+              variant="secondary"
+              className="h-12 w-full py-2 text-sm"
+              disabled={mutating}
+              onClick={() => onAccion({ tipo: "sustituir", pedidoId: pedido.id })}
+            >
+              Sustituir
+            </Button>
+          </div>
+        )
+      )}
+    </article>
+  );
+}
+
+function EstadoMini({ estado }: { estado: Pedido["estado"] }) {
+  const map: Record<string, { cls: string; label: string }> = {
+    EN_VIAJE: { cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300", label: "En viaje" },
+    ENTREGADO: { cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300", label: "Entregado" },
+    ENTREGADO_PARCIAL: { cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300", label: "Parcial" },
+    RE_AGENDADO: { cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300", label: "Re-agendado" },
+    RECHAZADO: { cls: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300", label: "Rechazado" },
+  };
+  const c = map[estado] ?? { cls: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300", label: estado };
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${c.cls}`}>
+      {c.label}
+    </span>
+  );
+}
+
+function Rendicion({
+  ruta,
+  pedidos,
+  cobradoPorPedido,
+  remitoPedidoIds,
+  mutating,
+  onCerrar,
+  onCobrar,
+}: {
+  ruta: Ruta;
+  pedidos: Pedido[];
+  cobradoPorPedido: Map<number, number>;
+  remitoPedidoIds: Set<number>;
+  mutating: boolean;
+  onCerrar: () => Promise<void>;
+  onCobrar: (pedidoId: number) => void;
+}) {
+  const entregados = pedidos.filter(
+    (p) => p.estado === "ENTREGADO" || p.estado === "ENTREGADO_PARCIAL"
+  );
+  const cobradoTotal = [...cobradoPorPedido.values()].reduce((a, b) => a + b, 0);
+  const cobranzasAsentadas = entregados.filter((p) => (cobradoPorPedido.get(p.id) ?? 0) > 0);
+  const remitos = entregados.filter((p) => remitoPedidoIds.has(p.id));
+  const sinCobrar = entregados.filter((p) => (cobradoPorPedido.get(p.id) ?? 0) <= 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
+            ¡Ruta completa!
+          </h2>
+          <p className="text-sm text-neutral-500">
+            Todas las paradas fueron entregadas. Revisá el resumen y cerrá la jornada.
+          </p>
+        </div>
+
+        <dl className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-800">
+          <div className="flex items-center justify-between gap-3 py-2.5">
+            <dt className="text-sm text-neutral-500">Pedidos entregados</dt>
+            <dd className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+              {entregados.length} / {pedidos.length}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-3 py-2.5">
+            <dt className="text-sm text-neutral-500">Cobranzas asentadas</dt>
+            <dd className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+              {cobranzasAsentadas.length} · {formatMoney(cobradoTotal)}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-3 py-2.5">
+            <dt className="text-sm text-neutral-500">Remitos</dt>
+            <dd className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+              {remitos.length}
+            </dd>
+          </div>
+        </dl>
       </div>
+
+      {sinCobrar.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+          <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+            Tenés {sinCobrar.length} pedido{sinCobrar.length === 1 ? "" : "s"} sin cobrar
+          </p>
+          <div className="flex flex-col gap-2">
+            {sinCobrar.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onCobrar(p.id)}
+                className="flex items-center justify-between rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-sm dark:border-amber-800 dark:bg-neutral-900"
+              >
+                <span className="font-medium text-neutral-900 dark:text-neutral-100">{p.numero}</span>
+                <span className="font-semibold text-amber-700 dark:text-amber-400">
+                  {formatMoney(p.total)}
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Podés asentar cobranzas pendientes antes de cerrar la jornada.
+          </p>
+        </div>
+      )}
+
+      <SwipeButton label="Deslizar para cerrar jornada" onConfirm={onCerrar} disabled={mutating} />
+      <Button className="h-14 w-full py-4 text-base" disabled={mutating} onClick={() => void onCerrar()}>
+        {mutating ? "Cerrando..." : "Cerrar Jornada"}
+      </Button>
+
+      <p className="text-xs text-neutral-400">
+        Ruta #{ruta.id} · {formatDate(ruta.fechaJornada)}
+      </p>
+    </div>
+  );
+}
+
+function Finalizada({ ruta }: { ruta: Ruta }) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-neutral-200 bg-white p-8 text-center dark:border-neutral-800 dark:bg-neutral-900">
+      <p className="text-base font-medium text-emerald-600 dark:text-emerald-400">✓</p>
+      <p className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+        Jornada finalizada
+      </p>
+      <p className="text-sm text-neutral-500">
+        La ruta #{ruta.id} del {formatDate(ruta.fechaJornada)} quedó cerrada.
+      </p>
     </div>
   );
 }
@@ -927,6 +1215,139 @@ function ParcialSheet({
             disabled={submitting}
           >
             {submitting ? "Registrando..." : "Registrar parcial"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CobranzaSheet({
+  pedido,
+  cobrado,
+  onCancel,
+  onRegister,
+}: {
+  pedido: Pedido;
+  cobrado: number;
+  onCancel: () => void;
+  onRegister: (monto: number, formaPago: FormaPago) => Promise<void>;
+}) {
+  const saldo = Math.max(0, pedido.total - cobrado);
+  const [monto, setMonto] = useState<string>(saldo > 0 ? String(saldo) : "");
+  const [formaPago, setFormaPago] = useState<FormaPago>("EFECTIVO");
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleRegister() {
+    const montoNum = Number(monto);
+    if (!monto || !Number.isFinite(montoNum) || montoNum <= 0) {
+      setLocalError("Ingresá un monto mayor a cero.");
+      return;
+    }
+    setLocalError(null);
+    setSubmitting(true);
+    try {
+      await onRegister(montoNum, formaPago);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : "Error inesperado");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-50">
+      <div className="fixed inset-0 bg-black/40" aria-hidden="true" onClick={onCancel} />
+      <div className="relative mx-auto w-full max-w-md rounded-t-2xl border-t border-neutral-200 bg-white p-5 pb-[env(safe-area-inset-bottom)] dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+            Cobrar · {pedido.numero}
+          </h2>
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="Cerrar"
+            className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          >
+            Cerrar
+          </button>
+        </div>
+
+        <div className="mb-4 flex flex-col gap-1 rounded-lg border border-neutral-200 p-3 text-sm dark:border-neutral-800">
+          <div className="flex items-center justify-between">
+            <span className="text-neutral-500">Total pedido</span>
+            <span className="font-semibold text-neutral-900 dark:text-neutral-100">
+              {formatMoney(pedido.total)}
+            </span>
+          </div>
+          {cobrado > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500">Ya cobrado</span>
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                {formatMoney(cobrado)}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <span className="text-neutral-500">Saldo a cobrar</span>
+            <span className="font-semibold text-amber-600 dark:text-amber-400">
+              {formatMoney(saldo)}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cobranza-monto" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              Monto
+            </label>
+            <input
+              id="cobranza-monto"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={monto}
+              onChange={(e) => setMonto(e.target.value)}
+              className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cobranza-forma" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              Forma de pago
+            </label>
+            <select
+              id="cobranza-forma"
+              value={formaPago}
+              onChange={(e) => setFormaPago(e.target.value as FormaPago)}
+              className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+            >
+              {FORMAS_PAGO.map((f) => (
+                <option key={f} value={f}>
+                  {FORMA_PAGO_LABELS[f]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {localError && <div className="mt-3"><ErrorBox message={localError} /></div>}
+
+        <div className="mt-4 flex gap-2">
+          <Button
+            variant="secondary"
+            className="h-14 flex-1 py-4 text-base"
+            onClick={onCancel}
+            disabled={submitting}
+          >
+            Cancelar
+          </Button>
+          <Button
+            className="h-14 flex-1 py-4 text-base"
+            onClick={() => void handleRegister()}
+            disabled={submitting}
+          >
+            {submitting ? "Registrando..." : "Registrar cobranza"}
           </Button>
         </div>
       </div>

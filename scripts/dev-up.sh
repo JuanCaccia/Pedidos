@@ -108,7 +108,7 @@ echo "   Backend UP ($(cat "$BACKEND_PID_FILE"))"
 # ---------- 4. Frontend ----------
 echo ">> Frontend en :$FRONTEND_PORT"
 [ -f "$FRONTEND_PID_FILE" ] && kill "$(cat "$FRONTEND_PID_FILE")" 2>/dev/null
-nohup setsid bash -c "API_PROXY_TARGET=http://localhost:$BACKEND_PORT npm run dev -- -p $FRONTEND_PORT" </dev/null >"$FRONTEND_LOG" 2>&1 &
+nohup setsid bash -c "cd '$FRONTEND_DIR' && API_PROXY_TARGET=http://localhost:$BACKEND_PORT npm run dev -- -p $FRONTEND_PORT" </dev/null >"$FRONTEND_LOG" 2>&1 &
 disown
 echo $! > "$FRONTEND_PID_FILE"
 ok=0

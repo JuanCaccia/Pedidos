@@ -71,7 +71,7 @@ class StockServiceTest {
 
 	private Long itemConIngreso(String sku, BigDecimal cantidad) {
 		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand(sku, "Item " + sku, "UN", null, null, null));
-		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "LOTE-" + sku, null, cantidad, "Test", null));
+		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "LOTE-" + sku, null, cantidad, "Test", null, null));
 		return item.getId();
 	}
 
@@ -399,10 +399,28 @@ class StockServiceTest {
 	}
 
 	@Test
+	void ingresoConPrecioPersistePrecioEnLote() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-PRECIO", "Precio", "UN", null, null, null));
+		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
+				item.getId(), "LOTE-PRECIO", null, new BigDecimal("100.000"), "Test", null, new BigDecimal("123.45")));
+
+		Lote lote = loteRepository.findByItemId(item.getId()).get(0);
+		assertEquals(0, new BigDecimal("123.45").compareTo(lote.getPrecioUnitario()));
+	}
+
+	@Test
+	void ingresoConPrecioNegativoLanza() {
+		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-PRECNEG", "PrecioNeg", "UN", null, null, null));
+		assertThrows(BusinessException.class, () -> stockService.crearIngreso(
+				new RegistrarIngreso.CrearIngresoCommand(item.getId(), "LOTE-PRECNEG", null, new BigDecimal("100.000"),
+						"Test", null, new BigDecimal("-1"))));
+	}
+
+	@Test
 	void ingresoConProveedorPersisteProveedorIdEnLote() {
 		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-PROV", "Prov", "UN", null, null, null));
 		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
-				item.getId(), "LOTE-PROV", null, new BigDecimal("100.000"), "Test", 42L));
+				item.getId(), "LOTE-PROV", null, new BigDecimal("100.000"), "Test", 42L, null));
 
 		Lote lote = loteRepository.findByItemId(item.getId()).get(0);
 		assertEquals(42L, lote.getProveedorId());
@@ -419,11 +437,11 @@ class StockServiceTest {
 	void listarLotesPorProveedorDevuelveSoloLosDeEseProveedor() {
 		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("SKU-P2", "P2", "UN", null, null, null));
 		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
-				item.getId(), "LOTE-P2-A", null, new BigDecimal("10.000"), "t", 7L));
+				item.getId(), "LOTE-P2-A", null, new BigDecimal("10.000"), "t", 7L, null));
 		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
-				item.getId(), "LOTE-P2-B", null, new BigDecimal("5.000"), "t", 7L));
+				item.getId(), "LOTE-P2-B", null, new BigDecimal("5.000"), "t", 7L, null));
 		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
-				item.getId(), "LOTE-P2-C", null, new BigDecimal("3.000"), "t", 9L));
+				item.getId(), "LOTE-P2-C", null, new BigDecimal("3.000"), "t", 9L, null));
 
 		List<Lote> delProveedor7 = stockService.listarLotesPorProveedor(7L);
 		List<Lote> delProveedor9 = stockService.listarLotesPorProveedor(9L);
@@ -464,7 +482,7 @@ class StockServiceTest {
 		LocalDate hoy = LocalDate.now();
 		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("AGOTA", "Agota", "UN", null, null, null));
 		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "L-AGOTA", hoy.plusDays(10),
-				new BigDecimal("100.000"), "Test", null));
+				new BigDecimal("100.000"), "Test", null, null));
 		Lote lote = loteRepository.findByItemId(item.getId()).get(0);
 
 		stockService.egresarPorLotes(item.getId(), 99L, new BigDecimal("100.000"));
@@ -477,7 +495,7 @@ class StockServiceTest {
 		LocalDate hoy = LocalDate.now();
 		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("PARC", "Parc", "UN", null, null, null));
 		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "L-PARC", hoy.plusDays(10),
-				new BigDecimal("100.000"), "Test", null));
+				new BigDecimal("100.000"), "Test", null, null));
 		Lote lote = loteRepository.findByItemId(item.getId()).get(0);
 
 		stockService.egresarPorLotes(item.getId(), 99L, new BigDecimal("40.000"));
@@ -521,7 +539,7 @@ class StockServiceTest {
 		LocalDate hoy = LocalDate.now();
 		Item item = stockService.crearItem(new GestionarItem.CrearItemCommand("DESC0", "D0", "UN", null, null, null));
 		stockService.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), "L-DESC0", hoy.plusDays(10),
-				new BigDecimal("50.000"), "Test", null));
+				new BigDecimal("50.000"), "Test", null, null));
 		Lote lote = loteRepository.findByItemId(item.getId()).get(0);
 		stockService.egresarPorLotes(item.getId(), 99L, new BigDecimal("50.000"));
 		int mermasAntes = (int) movimientoRepository.findByItemIdOrderByFechaAsc(item.getId()).stream()

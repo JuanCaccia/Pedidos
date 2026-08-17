@@ -12,8 +12,7 @@ public class OrdenCompraMapper {
 		orden.setFecha(entity.getFecha());
 		orden.setEstado(entity.getEstado());
 		for (OrdenCompraLineaJpaEntity lineaEntity : entity.getLineas()) {
-			OrdenCompraLinea linea = new OrdenCompraLinea(lineaEntity.getItemId(), lineaEntity.getCantidadPedida(),
-					lineaEntity.getPrecioUnitario());
+			OrdenCompraLinea linea = new OrdenCompraLinea(lineaEntity.getItemId(), lineaEntity.getCantidadPedida());
 			linea.setId(lineaEntity.getId());
 			linea.setCantidadRecibida(lineaEntity.getCantidadRecibida());
 			orden.agregarLinea(linea);
@@ -29,7 +28,7 @@ public class OrdenCompraMapper {
 		}
 		for (OrdenCompraLinea linea : orden.getLineas()) {
 			OrdenCompraLineaJpaEntity lineaEntity = new OrdenCompraLineaJpaEntity(linea.getItemId(),
-					linea.getCantidadPedida(), linea.getCantidadRecibida(), linea.getPrecioUnitario());
+					linea.getCantidadPedida(), linea.getCantidadRecibida());
 			if (linea.getId() != null) {
 				lineaEntity.setId(linea.getId());
 			}

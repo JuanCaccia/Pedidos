@@ -33,6 +33,9 @@ public class LoteJpaEntity extends BaseEntity {
 	@Column(name = "cantidad_ingresada", nullable = false, precision = 12, scale = 3)
 	private BigDecimal cantidadIngresada;
 
+	@Column(name = "precio_unitario", precision = 18, scale = 4)
+	private BigDecimal precioUnitario;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "estado", nullable = false, length = 20)
 	private LoteEstado estado = LoteEstado.VIGENTE;
@@ -95,6 +98,14 @@ public class LoteJpaEntity extends BaseEntity {
 
 	public void setCantidadIngresada(BigDecimal cantidadIngresada) {
 		this.cantidadIngresada = cantidadIngresada;
+	}
+
+	public BigDecimal getPrecioUnitario() {
+		return precioUnitario;
+	}
+
+	public void setPrecioUnitario(BigDecimal precioUnitario) {
+		this.precioUnitario = precioUnitario;
 	}
 
 	public LoteEstado getEstado() {

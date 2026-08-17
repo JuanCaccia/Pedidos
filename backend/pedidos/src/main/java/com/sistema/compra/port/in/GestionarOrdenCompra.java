@@ -7,13 +7,13 @@ import java.util.List;
 
 public interface GestionarOrdenCompra {
 
-	record LineaOrdenCommand(Long itemId, BigDecimal cantidad, BigDecimal precioUnitario) {
+	record LineaOrdenCommand(Long itemId, BigDecimal cantidad) {
 	}
 
 	record CrearOrdenCompraCommand(Long proveedorId, String observaciones, List<LineaOrdenCommand> lineas) {
 	}
 
-	record RecepcionLineaCommand(Long lineaId, BigDecimal cantidadRecibida) {
+	record RecepcionLineaCommand(Long lineaId, BigDecimal cantidadRecibida, BigDecimal precioUnitario) {
 	}
 
 	record RecepcionCommand(Long ordenId, List<RecepcionLineaCommand> lineas) {

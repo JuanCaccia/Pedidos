@@ -40,7 +40,7 @@ public class OrdenCompraController {
 	@PostMapping
 	public ResponseEntity<OrdenCompraResponse> crear(@Valid @RequestBody CrearOrdenCompraRequest request) {
 		List<GestionarOrdenCompra.LineaOrdenCommand> lineas = request.lineas().stream()
-				.map(l -> new GestionarOrdenCompra.LineaOrdenCommand(l.itemId(), l.cantidad(), l.precioUnitario()))
+				.map(l -> new GestionarOrdenCompra.LineaOrdenCommand(l.itemId(), l.cantidad()))
 				.toList();
 		OrdenCompra orden = gestionarOrdenCompra.crearOrdenCompra(new GestionarOrdenCompra.CrearOrdenCompraCommand(
 				request.proveedorId(), request.observaciones(), lineas));
@@ -51,7 +51,7 @@ public class OrdenCompraController {
 	public ResponseEntity<OrdenCompraResponse> registrarRecepcion(@PathVariable Long id,
 			@Valid @RequestBody RecepcionRequest request) {
 		List<GestionarOrdenCompra.RecepcionLineaCommand> lineas = request.lineas().stream()
-				.map(rl -> new GestionarOrdenCompra.RecepcionLineaCommand(rl.lineaId(), rl.cantidadRecibida()))
+				.map(rl -> new GestionarOrdenCompra.RecepcionLineaCommand(rl.lineaId(), rl.cantidadRecibida(), rl.precioUnitario()))
 				.toList();
 		OrdenCompra orden = gestionarOrdenCompra.registrarRecepcion(new GestionarOrdenCompra.RecepcionCommand(id, lineas));
 		return ResponseEntity.ok(OrdenCompraResponse.from(orden));

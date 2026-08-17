@@ -275,7 +275,8 @@ class ProveedorServiceTest {
 		}
 
 		@Override
-		public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId) {
+		public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId,
+				BigDecimal precioUnitario) {
 			// no-op en este test
 		}
 	}

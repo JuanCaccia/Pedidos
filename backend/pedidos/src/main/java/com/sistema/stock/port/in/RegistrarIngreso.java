@@ -8,7 +8,7 @@ import java.time.LocalDate;
 public interface RegistrarIngreso {
 
 	record CrearIngresoCommand(Long itemId, String codigoLote, LocalDate fechaVencimiento, BigDecimal cantidad, String motivo,
-			Long proveedorId) {
+			Long proveedorId, BigDecimal precioUnitario) {
 	}
 
 	Lote crearIngreso(CrearIngresoCommand command);

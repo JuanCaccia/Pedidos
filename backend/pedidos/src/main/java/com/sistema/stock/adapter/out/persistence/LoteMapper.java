@@ -9,6 +9,7 @@ public class LoteMapper {
 				entity.getFechaVencimiento(), entity.getCantidadIngresada());
 		lote.setId(entity.getId());
 		lote.setProveedorId(entity.getProveedorId());
+		lote.setPrecioUnitario(entity.getPrecioUnitario());
 		lote.setEstado(entity.getEstado());
 		return lote;
 	}
@@ -20,6 +21,7 @@ public class LoteMapper {
 			entity.setId(lote.getId());
 		}
 		entity.setProveedorId(lote.getProveedorId());
+		entity.setPrecioUnitario(lote.getPrecioUnitario());
 		entity.setEstado(lote.getEstado());
 		return entity;
 	}

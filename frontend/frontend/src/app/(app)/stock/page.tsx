@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api";
 import type { Item, Lote, MovimientoStock, PageResponse, ReporteStockItem } from "@/lib/types";
-import { formatDate, formatDateTime, formatNumber } from "@/lib/format";
+import { formatDate, formatDateTime, formatMoney, formatNumber } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import Loading from "@/components/Loading";
 import ErrorBox from "@/components/ErrorBox";
@@ -455,6 +455,7 @@ function StockPageInner() {
                   <th className="px-5 py-2.5 font-medium">Código de lote</th>
                   <th className="px-5 py-2.5 font-medium">Vencimiento</th>
                   <th className="px-5 py-2.5 font-medium text-right">Disponible</th>
+                  <th className="px-5 py-2.5 font-medium text-right">Precio unitario</th>
                   <th className="px-5 py-2.5 font-medium">Estado</th>
                   <th className="px-5 py-2.5" />
                 </tr>
@@ -462,7 +463,7 @@ function StockPageInner() {
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                 {filtrarLotes().length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-5 py-6 text-center text-neutral-500">
+                    <td colSpan={7} className="px-5 py-6 text-center text-neutral-500">
                       No hay lotes para este filtro
                     </td>
                   </tr>
@@ -492,6 +493,9 @@ function StockPageInner() {
                       </td>
                       <td className="px-5 py-2.5 text-right font-medium text-neutral-700 dark:text-neutral-300">
                         {formatNumber(lote.disponible)}
+                      </td>
+                      <td className="px-5 py-2.5 text-right text-neutral-700 dark:text-neutral-300">
+                        {lote.precioUnitario != null ? formatMoney(lote.precioUnitario) : "-"}
                       </td>
                       <td className="px-5 py-2.5">
                         <span
@@ -583,6 +587,7 @@ function IngresoForm({
   const [codigoLote, setCodigoLote] = useState("");
   const [fechaVencimiento, setFechaVencimiento] = useState("");
   const [cantidad, setCantidad] = useState("");
+  const [precioUnitario, setPrecioUnitario] = useState("");
   const [motivo, setMotivo] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -607,6 +612,7 @@ function IngresoForm({
         codigoLote: codigoLote.trim() || undefined,
         fechaVencimiento: fechaVencimiento || undefined,
         cantidad: cantidadNum,
+        precioUnitario: precioUnitario.trim() === "" ? undefined : Number(precioUnitario),
         motivo: motivo.trim() || undefined,
       });
       await onCreated("Ingreso registrado correctamente.");
@@ -675,6 +681,21 @@ function IngresoForm({
             onChange={(e) => setCantidad(e.target.value)}
             className={INPUT_CLASS}
             placeholder="Ej.: 12.5"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="ingreso-precio" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            Precio unitario
+          </label>
+          <input
+            id="ingreso-precio"
+            type="number"
+            min="0"
+            step="0.01"
+            value={precioUnitario}
+            onChange={(e) => setPrecioUnitario(e.target.value)}
+            className={INPUT_CLASS}
+            placeholder="Opcional. Ej.: 125.50"
           />
         </div>
         <div className="flex flex-col gap-1.5">

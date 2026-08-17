@@ -7,13 +7,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record LoteResponse(Long id, Long itemId, Long proveedorId, String codigoLote, LocalDate fechaIngreso,
-		LocalDate fechaVencimiento, BigDecimal cantidadIngresada, BigDecimal disponible, String estado, String itemNombre,
-		String itemSku) {
+		LocalDate fechaVencimiento, BigDecimal cantidadIngresada, BigDecimal precioUnitario, BigDecimal disponible,
+		String estado, String itemNombre, String itemSku) {
 
 	public static LoteResponse from(Lote lote, BigDecimal disponible, String itemNombre, String itemSku) {
 		return new LoteResponse(lote.getId(), lote.getItemId(), lote.getProveedorId(), lote.getCodigoLote(),
-				lote.getFechaIngreso(), lote.getFechaVencimiento(), lote.getCantidadIngresada(), disponible,
-				resolverEstado(lote, disponible), itemNombre, itemSku);
+				lote.getFechaIngreso(), lote.getFechaVencimiento(), lote.getCantidadIngresada(),
+				lote.getPrecioUnitario(), disponible, resolverEstado(lote, disponible), itemNombre, itemSku);
 	}
 
 	// Resolución del estado: DESCARTADO (persistido, explícito) tiene prioridad; el resto se deriva.

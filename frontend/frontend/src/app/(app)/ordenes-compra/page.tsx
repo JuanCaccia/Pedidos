@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import type { Categoria, EstadoOrdenCompra, Item, OrdenCompra, PageResponse, Proveedor } from "@/lib/types";
-import { formatDate, formatMoney, formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import Loading from "@/components/Loading";
 import ErrorBox from "@/components/ErrorBox";
 import Button from "@/components/Button";
@@ -40,7 +40,6 @@ interface FormLineaRow {
   key: number;
   itemId: number | null;
   cantidad: string;
-  precioUnitario: string;
 }
 
 export default function OrdenesCompraPage() {
@@ -145,7 +144,7 @@ export default function OrdenesCompraPage() {
                   <th className="px-4 py-3 font-medium">Proveedor</th>
                   <th className="px-4 py-3 font-medium">Fecha</th>
                   <th className="px-4 py-3 font-medium">Estado</th>
-                  <th className="px-4 py-3 text-right font-medium">Total</th>
+                  <th className="px-4 py-3 text-right font-medium">Ítems</th>
                   <th className="px-4 py-3 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
@@ -235,7 +234,6 @@ function OrdenRow({
   onRecepcionSuccess: () => Promise<void>;
 }) {
   const proveedor = proveedoresById.get(orden.proveedorId);
-  const total = orden.lineas.reduce((acc, l) => acc + l.cantidadPedida * l.precioUnitario, 0);
   const puedeRecibir = orden.estado === "PENDIENTE" || orden.estado === "RECIBIDA_PARCIAL";
 
   return (
@@ -249,7 +247,9 @@ function OrdenRow({
         <td className="px-4 py-3">
           <OrdenEstadoBadge estado={orden.estado} />
         </td>
-        <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">{formatMoney(total)}</td>
+        <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">
+          {orden.lineas.length}
+        </td>
         <td className="px-4 py-3">
           <div className="flex items-center justify-end gap-2">
             <Button variant="secondary" onClick={onToggle}>
@@ -286,7 +286,6 @@ function OrdenRow({
                         <th className="px-3 py-2 text-right font-medium">Pedida</th>
                         <th className="px-3 py-2 text-right font-medium">Recibida</th>
                         <th className="px-3 py-2 text-right font-medium">Restante</th>
-                        <th className="px-3 py-2 text-right font-medium">Precio unitario</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
@@ -305,9 +304,6 @@ function OrdenRow({
                             </td>
                             <td className="px-3 py-2 text-right text-neutral-700 dark:text-neutral-300">
                               {formatNumber(linea.restante)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-neutral-700 dark:text-neutral-300">
-                              {formatMoney(linea.precioUnitario)}
                             </td>
                           </tr>
                         );
@@ -348,6 +344,7 @@ function RecepcionPanel({
   const [values, setValues] = useState<Record<number, string>>(() =>
     Object.fromEntries(orden.lineas.map((l) => [l.id, String(l.restante)]))
   );
+  const [precios, setPrecios] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -359,12 +356,17 @@ function RecepcionPanel({
       .map((l) => {
         const parsed = Number(values[l.id] ?? "");
         const cantidadRecibida = Number.isNaN(parsed) ? 0 : Math.min(Math.max(parsed, 0), l.restante);
-        return { lineaId: l.id, cantidadRecibida };
+        const precio = Number(precios[l.id] ?? "");
+        return { lineaId: l.id, cantidadRecibida, precioUnitario: precio };
       })
       .filter((l) => l.cantidadRecibida > 0);
 
     if (lineas.length === 0) {
       setError("Ingresá al menos una cantidad mayor a cero.");
+      return;
+    }
+    if (lineas.some((l) => Number.isNaN(l.precioUnitario) || l.precioUnitario <= 0)) {
+      setError("Ingresá un precio unitario mayor a cero para cada línea recibida.");
       return;
     }
 
@@ -388,7 +390,7 @@ function RecepcionPanel({
         {orden.lineas.map((linea) => {
           const item = itemsById.get(linea.itemId);
           return (
-            <div key={linea.id} className="grid grid-cols-[1fr_6rem_auto] items-center gap-2">
+            <div key={linea.id} className="grid grid-cols-[1fr_6rem_7rem_auto] items-center gap-2">
               <span className="truncate text-sm text-neutral-700 dark:text-neutral-300">
                 {item ? `${item.sku} — ${item.nombre}` : `#${linea.itemId}`}
               </span>
@@ -402,6 +404,19 @@ function RecepcionPanel({
                   setValues((prev) => ({ ...prev, [linea.id]: e.target.value }))
                 }
                 aria-label={`Cantidad a recibir línea ${linea.id}`}
+                placeholder="Cant."
+                className={INPUT_CLASS}
+              />
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={precios[linea.id] ?? ""}
+                onChange={(e) =>
+                  setPrecios((prev) => ({ ...prev, [linea.id]: e.target.value }))
+                }
+                aria-label={`Precio unitario línea ${linea.id}`}
+                placeholder="Precio"
                 className={INPUT_CLASS}
               />
               <span className="text-xs text-neutral-500">restante: {formatNumber(linea.restante)}</span>
@@ -431,7 +446,7 @@ function NuevaOrdenForm({
   const [categoriaId, setCategoriaId] = useState("");
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [lineas, setLineas] = useState<FormLineaRow[]>([
-    { key: Date.now(), itemId: null, cantidad: "", precioUnitario: "" },
+    { key: Date.now(), itemId: null, cantidad: "" },
   ]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -445,7 +460,7 @@ function NuevaOrdenForm({
   }, []);
 
   function addLinea() {
-    setLineas((prev) => [...prev, { key: Date.now() + Math.random(), itemId: null, cantidad: "", precioUnitario: "" }]);
+    setLineas((prev) => [...prev, { key: Date.now() + Math.random(), itemId: null, cantidad: "" }]);
   }
 
   function updateLinea<K extends keyof FormLineaRow>(key: number, field: K, value: FormLineaRow[K]) {
@@ -479,7 +494,6 @@ function NuevaOrdenForm({
         lineas: lineasValidas.map((l) => ({
           itemId: l.itemId as number,
           cantidad: Number(l.cantidad),
-          precioUnitario: Number(l.precioUnitario || 0),
         })),
       });
       await onCreated();
@@ -561,7 +575,7 @@ function NuevaOrdenForm({
           </div>
           <div className="space-y-2">
             {lineas.map((linea) => (
-              <div key={linea.key} className="grid grid-cols-[1fr_5rem_6rem_auto] gap-2">
+              <div key={linea.key} className="grid grid-cols-[1fr_5rem_auto] gap-2">
                 <Combobox
                   key={`${linea.key}-${categoriaId}`}
                   placeholder="Buscar item..."
@@ -586,15 +600,6 @@ function NuevaOrdenForm({
                   placeholder="Cant."
                   value={linea.cantidad}
                   onChange={(e) => updateLinea(linea.key, "cantidad", e.target.value)}
-                  className={INPUT_CLASS}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder="Precio"
-                  value={linea.precioUnitario}
-                  onChange={(e) => updateLinea(linea.key, "precioUnitario", e.target.value)}
                   className={INPUT_CLASS}
                 />
                 <button

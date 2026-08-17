@@ -5,5 +5,6 @@ import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 
-public record RecepcionLineaRequest(@NotNull Long lineaId, @NotNull @Positive BigDecimal cantidadRecibida) {
+public record RecepcionLineaRequest(@NotNull Long lineaId, @NotNull @Positive BigDecimal cantidadRecibida,
+		@NotNull @Positive BigDecimal precioUnitario) {
 }

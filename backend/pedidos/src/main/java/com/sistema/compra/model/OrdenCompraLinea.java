@@ -8,15 +8,13 @@ public class OrdenCompraLinea {
 	private Long itemId;
 	private BigDecimal cantidadPedida;
 	private BigDecimal cantidadRecibida = BigDecimal.ZERO;
-	private BigDecimal precioUnitario;
 
 	public OrdenCompraLinea() {
 	}
 
-	public OrdenCompraLinea(Long itemId, BigDecimal cantidadPedida, BigDecimal precioUnitario) {
+	public OrdenCompraLinea(Long itemId, BigDecimal cantidadPedida) {
 		this.itemId = itemId;
 		this.cantidadPedida = cantidadPedida;
-		this.precioUnitario = precioUnitario;
 	}
 
 	public void recibir(BigDecimal cantidad) {
@@ -57,13 +55,5 @@ public class OrdenCompraLinea {
 
 	public void setCantidadRecibida(BigDecimal cantidadRecibida) {
 		this.cantidadRecibida = cantidadRecibida;
-	}
-
-	public BigDecimal getPrecioUnitario() {
-		return precioUnitario;
-	}
-
-	public void setPrecioUnitario(BigDecimal precioUnitario) {
-		this.precioUnitario = precioUnitario;
 	}
 }

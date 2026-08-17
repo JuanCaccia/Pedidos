@@ -8,5 +8,6 @@ public interface StockGateway {
 
 	boolean itemActivo(Long itemId);
 
-	void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId);
+	void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId,
+			BigDecimal precioUnitario);
 }

@@ -133,6 +133,9 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 	public Lote crearIngreso(CrearIngresoCommand command) {
 		Item item = obtenerItemO404(command.itemId());
 		validarCantidadPositiva(command.cantidad());
+		if (command.precioUnitario() != null && command.precioUnitario().signum() < 0) {
+			throw new BusinessException("VALIDATION_ERROR", "El precio unitario no puede ser negativo");
+		}
 		String codigoLote = command.codigoLote() == null || command.codigoLote().isBlank()
 				? "L-" + LocalDate.now() + "-" + (System.nanoTime() % 100000)
 				: command.codigoLote().trim();
@@ -141,6 +144,7 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 				: command.motivo().trim();
 		Lote lote = new Lote(item.getId(), codigoLote, LocalDate.now(), command.fechaVencimiento(), command.cantidad());
 		lote.setProveedorId(command.proveedorId());
+		lote.setPrecioUnitario(command.precioUnitario());
 		Lote guardado = loteRepository.save(lote);
 		movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.INGRESO, item.getId(), guardado.getId(),
 				null, command.cantidad(), LocalDateTime.now(), motivo));

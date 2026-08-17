@@ -49,9 +49,6 @@ public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenC
 			if (linea.cantidad() == null || linea.cantidad().signum() <= 0) {
 				throw new BusinessException("VALIDATION_ERROR", "La cantidad debe ser mayor a cero");
 			}
-			if (linea.precioUnitario() == null || linea.precioUnitario().signum() < 0) {
-				throw new BusinessException("VALIDATION_ERROR", "El precio unitario no puede ser negativo");
-			}
 			if (!stockGateway.existeItem(linea.itemId())) {
 				throw new NotFoundException("Item no encontrado: " + linea.itemId());
 			}
@@ -63,7 +60,7 @@ public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenC
 					throw new BusinessException("ITEM_NO_PROVISTO_POR_PROVEEDOR",
 							"El item " + linea.itemId() + " no está en el catálogo activo del proveedor " + command.proveedorId());
 				}
-				orden.agregarLinea(new OrdenCompraLinea(linea.itemId(), linea.cantidad(), linea.precioUnitario()));
+				orden.agregarLinea(new OrdenCompraLinea(linea.itemId(), linea.cantidad()));
 		}
 		orden.setNumero("OC-" + String.format("%06d", System.nanoTime() % 1000000));
 		return ordenCompraRepository.save(orden);
@@ -84,6 +81,9 @@ public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenC
 			if (rl.cantidadRecibida() == null || rl.cantidadRecibida().signum() <= 0) {
 				throw new BusinessException("VALIDATION_ERROR", "La cantidad recibida debe ser mayor a cero");
 			}
+			if (rl.precioUnitario() == null || rl.precioUnitario().signum() <= 0) {
+				throw new BusinessException("VALIDATION_ERROR", "El precio unitario recibido debe ser mayor a cero");
+			}
 			BigDecimal restante = linea.restante();
 			if (rl.cantidadRecibida().compareTo(restante) > 0) {
 				throw new BusinessException("VALIDATION_ERROR", "No se puede recibir más que el restante (" + restante + ")");
@@ -91,7 +91,7 @@ public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenC
 			linea.recibir(rl.cantidadRecibida());
 			String codigoLote = orden.getNumero() + "-" + (System.nanoTime() % 100000);
 			stockGateway.registrarIngreso(linea.getItemId(), codigoLote, rl.cantidadRecibida(),
-					"Recepción de OC " + orden.getNumero(), orden.getProveedorId());
+					"Recepción de OC " + orden.getNumero(), orden.getProveedorId(), rl.precioUnitario());
 			proveedorRepository.vincularItem(orden.getProveedorId(), linea.getItemId());
 		}
 		boolean completa = orden.getLineas().stream()

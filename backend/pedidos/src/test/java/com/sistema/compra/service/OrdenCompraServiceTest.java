@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,13 +52,13 @@ class OrdenCompraServiceTest {
 
 	private GestionarOrdenCompra.CrearOrdenCompraCommand comandoConDosLineas() {
 		return new GestionarOrdenCompra.CrearOrdenCompraCommand(1L, "obs",
-				List.of(new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10"), new BigDecimal("50")),
-						new GestionarOrdenCompra.LineaOrdenCommand(200L, new BigDecimal("5"), new BigDecimal("30"))));
+				List.of(new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10")),
+						new GestionarOrdenCompra.LineaOrdenCommand(200L, new BigDecimal("5"))));
 	}
 
 	private GestionarOrdenCompra.CrearOrdenCompraCommand comandoConUnaLinea() {
 		return new GestionarOrdenCompra.CrearOrdenCompraCommand(1L, "obs",
-				List.of(new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10"), new BigDecimal("50"))));
+				List.of(new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10"))));
 	}
 
 	@Test
@@ -83,7 +84,7 @@ class OrdenCompraServiceTest {
 	void crearOrdenCompraConProveedorInexistenteLanza() {
 		assertThrows(NotFoundException.class, () -> ordenCompraService.crearOrdenCompra(
 				new GestionarOrdenCompra.CrearOrdenCompraCommand(999L, null, List.of(
-						new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10"), new BigDecimal("50"))))));
+						new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10"))))));
 	}
 
 	@Test
@@ -91,7 +92,7 @@ class OrdenCompraServiceTest {
 		stockGateway.existe = false;
 		assertThrows(NotFoundException.class, () -> ordenCompraService.crearOrdenCompra(
 				new GestionarOrdenCompra.CrearOrdenCompraCommand(1L, null, List.of(
-						new GestionarOrdenCompra.LineaOrdenCommand(999L, new BigDecimal("10"), new BigDecimal("50"))))));
+						new GestionarOrdenCompra.LineaOrdenCommand(999L, new BigDecimal("10"))))));
 	}
 
 	@Test
@@ -99,14 +100,14 @@ class OrdenCompraServiceTest {
 		stockGateway.itemActivo = false;
 		assertThrows(BusinessException.class, () -> ordenCompraService.crearOrdenCompra(
 				new GestionarOrdenCompra.CrearOrdenCompraCommand(1L, null, List.of(
-						new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10"), new BigDecimal("50"))))));
+						new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10"))))));
 	}
 
 	@Test
 	void crearOrdenCompraConItemNoProvistoPorProveedorLanzaBusinessException() {
 		BusinessException ex = assertThrows(BusinessException.class, () -> ordenCompraService.crearOrdenCompra(
 				new GestionarOrdenCompra.CrearOrdenCompraCommand(1L, null, List.of(
-						new GestionarOrdenCompra.LineaOrdenCommand(999L, new BigDecimal("10"), new BigDecimal("50"))))));
+						new GestionarOrdenCompra.LineaOrdenCommand(999L, new BigDecimal("10"))))));
 		assertEquals("ITEM_NO_PROVISTO_POR_PROVEEDOR", ex.getCode());
 	}
 
@@ -120,6 +121,37 @@ class OrdenCompraServiceTest {
 	}
 
 	@Test
+	void crearOrdenCompraSinPrecioEnLineas() {
+		OrdenCompra orden = ordenCompraService.crearOrdenCompra(comandoConDosLineas());
+
+		assertEquals(2, orden.getLineas().size());
+		assertEquals(EstadoOrdenCompra.PENDIENTE, orden.getEstado());
+	}
+
+	@Test
+	void recepcionSinPrecioLanza() {
+		OrdenCompra orden = ordenCompraService.crearOrdenCompra(comandoConUnaLinea());
+		Long linea = orden.getLineas().get(0).getId();
+
+		assertThrows(BusinessException.class, () -> ordenCompraService.registrarRecepcion(
+				new GestionarOrdenCompra.RecepcionCommand(orden.getId(), List.of(
+						new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10"), null)))));
+		assertEquals(0, stockGateway.ingresos.size());
+	}
+
+	@Test
+	void recepcionConPrecioPersisteEnLote() {
+		OrdenCompra orden = ordenCompraService.crearOrdenCompra(comandoConUnaLinea());
+		Long linea = orden.getLineas().get(0).getId();
+
+		ordenCompraService.registrarRecepcion(new GestionarOrdenCompra.RecepcionCommand(orden.getId(), List.of(
+				new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10"), new BigDecimal("50")))));
+
+		assertEquals(1, stockGateway.ingresos.size());
+		assertTrue(stockGateway.ingresos.contains("100:10:1:50"));
+	}
+
+	@Test
 	void recepcionParcialRegistraIngresoYQuedaParcial() {
 		OrdenCompra orden = ordenCompraService.crearOrdenCompra(comandoConDosLineas());
 		Long linea1 = orden.getLineas().get(0).getId();
@@ -127,13 +159,13 @@ class OrdenCompraServiceTest {
 
 		OrdenCompra recibida = ordenCompraService.registrarRecepcion(new GestionarOrdenCompra.RecepcionCommand(
 				orden.getId(), List.of(
-						new GestionarOrdenCompra.RecepcionLineaCommand(linea1, new BigDecimal("10")),
-						new GestionarOrdenCompra.RecepcionLineaCommand(linea2, new BigDecimal("3")))));
+						new GestionarOrdenCompra.RecepcionLineaCommand(linea1, new BigDecimal("10"), new BigDecimal("50")),
+						new GestionarOrdenCompra.RecepcionLineaCommand(linea2, new BigDecimal("3"), new BigDecimal("30")))));
 
 		assertEquals(EstadoOrdenCompra.RECIBIDA_PARCIAL, recibida.getEstado());
 		assertEquals(2, stockGateway.ingresos.size());
-		assertTrue(stockGateway.ingresos.contains("100:10:1"));
-		assertTrue(stockGateway.ingresos.contains("200:3:1"));
+		assertTrue(stockGateway.ingresos.contains("100:10:1:50"));
+		assertTrue(stockGateway.ingresos.contains("200:3:1:30"));
 	}
 
 	@Test
@@ -143,7 +175,7 @@ class OrdenCompraServiceTest {
 
 		OrdenCompra recibida = ordenCompraService.registrarRecepcion(new GestionarOrdenCompra.RecepcionCommand(
 				orden.getId(), List.of(
-						new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10")))));
+						new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10"), new BigDecimal("50")))));
 
 		assertEquals(EstadoOrdenCompra.RECIBIDA, recibida.getEstado());
 		assertEquals(1, stockGateway.ingresos.size());
@@ -156,7 +188,7 @@ class OrdenCompraServiceTest {
 
 		assertThrows(BusinessException.class, () -> ordenCompraService.registrarRecepcion(
 				new GestionarOrdenCompra.RecepcionCommand(orden.getId(), List.of(
-						new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("12"))))));
+						new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("12"), new BigDecimal("50"))))));
 		assertEquals(0, stockGateway.ingresos.size());
 	}
 
@@ -167,14 +199,14 @@ class OrdenCompraServiceTest {
 		proveedorRepository.vincularItem(segundoProveedor.getId(), 100L);
 		OrdenCompra orden = ordenCompraService.crearOrdenCompra(new GestionarOrdenCompra.CrearOrdenCompraCommand(
 				segundoProveedor.getId(), "obs",
-				List.of(new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10"), new BigDecimal("50")))));
+				List.of(new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10")))));
 		Long linea = orden.getLineas().get(0).getId();
 
 		ordenCompraService.registrarRecepcion(new GestionarOrdenCompra.RecepcionCommand(orden.getId(), List.of(
-				new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10")))));
+				new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10"), new BigDecimal("50")))));
 
 		assertEquals(1, stockGateway.ingresos.size());
-		assertTrue(stockGateway.ingresos.contains("100:10:" + segundoProveedor.getId()));
+		assertTrue(stockGateway.ingresos.contains("100:10:" + segundoProveedor.getId() + ":50"));
 	}
 
 	@Test
@@ -185,7 +217,7 @@ class OrdenCompraServiceTest {
 		assertFalse(proveedorRepository.proveedorProveeItemActivo(1L, 100L));
 
 		ordenCompraService.registrarRecepcion(new GestionarOrdenCompra.RecepcionCommand(orden.getId(), List.of(
-				new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10")))));
+				new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10"), new BigDecimal("50")))));
 
 		assertTrue(proveedorRepository.proveedorProveeItemActivo(1L, 100L));
 	}
@@ -205,7 +237,7 @@ class OrdenCompraServiceTest {
 		OrdenCompra orden = ordenCompraService.crearOrdenCompra(comandoConUnaLinea());
 		Long linea = orden.getLineas().get(0).getId();
 		ordenCompraService.registrarRecepcion(new GestionarOrdenCompra.RecepcionCommand(orden.getId(), List.of(
-				new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10")))));
+				new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10"), new BigDecimal("50")))));
 
 		assertThrows(BusinessException.class, () -> ordenCompraService.cancelarOrdenCompra(orden.getId()));
 	}
@@ -352,8 +384,9 @@ class OrdenCompraServiceTest {
 		}
 
 		@Override
-		public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId) {
-			ingresos.add(itemId + ":" + cantidad + ":" + proveedorId);
+		public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId,
+				BigDecimal precioUnitario) {
+			ingresos.add(itemId + ":" + cantidad + ":" + proveedorId + ":" + precioUnitario);
 		}
 	}
 }

@@ -29,8 +29,9 @@ public class StockGatewayImpl implements StockGateway {
 	}
 
 	@Override
-	public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId) {
+	public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId,
+			BigDecimal precioUnitario) {
 		registrarIngreso.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
-				itemId, codigoLote, null, cantidad, motivo, proveedorId));
+				itemId, codigoLote, null, cantidad, motivo, proveedorId, precioUnitario));
 	}
 }

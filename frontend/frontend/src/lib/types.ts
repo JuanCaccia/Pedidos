@@ -125,6 +125,7 @@ export interface Lote {
   fechaIngreso: string;
   fechaVencimiento: string | null;
   cantidadIngresada: number;
+  precioUnitario: number | null;
   disponible: number;
   estado: "VENCIDO" | "AGOTADO" | "VIGENTE" | "DESCARTADO";
   itemNombre: string | null;
@@ -137,6 +138,7 @@ export interface IngresoRequest {
   fechaVencimiento?: string;
   cantidad: number;
   motivo?: string;
+  precioUnitario?: number;
 }
 
 export interface MermaRequest {
@@ -193,7 +195,6 @@ export interface OrdenCompraLinea {
   itemId: number;
   cantidadPedida: number;
   cantidadRecibida: number;
-  precioUnitario: number;
   restante: number;
 }
 
@@ -210,11 +211,11 @@ export interface OrdenCompra {
 export interface CrearOrdenCompraRequest {
   proveedorId: number;
   observaciones?: string;
-  lineas: { itemId: number; cantidad: number; precioUnitario: number }[];
+  lineas: { itemId: number; cantidad: number }[];
 }
 
 export interface RecepcionRequest {
-  lineas: { lineaId: number; cantidadRecibida: number }[];
+  lineas: { lineaId: number; cantidadRecibida: number; precioUnitario: number }[];
 }
 
 export interface ReporteStockItem {

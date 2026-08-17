@@ -20,19 +20,14 @@ public class OrdenCompraLineaJpaEntity extends BaseEntity {
 	@Column(name = "cantidad_recibida", nullable = false, precision = 12, scale = 3)
 	private BigDecimal cantidadRecibida;
 
-	@Column(name = "precio_unitario", nullable = false, precision = 12, scale = 2)
-	private BigDecimal precioUnitario;
-
 	protected OrdenCompraLineaJpaEntity() {
 		// required by JPA
 	}
 
-	public OrdenCompraLineaJpaEntity(Long itemId, BigDecimal cantidadPedida, BigDecimal cantidadRecibida,
-			BigDecimal precioUnitario) {
+	public OrdenCompraLineaJpaEntity(Long itemId, BigDecimal cantidadPedida, BigDecimal cantidadRecibida) {
 		this.itemId = itemId;
 		this.cantidadPedida = cantidadPedida;
 		this.cantidadRecibida = cantidadRecibida;
-		this.precioUnitario = precioUnitario;
 	}
 
 	public Long getItemId() {
@@ -57,13 +52,5 @@ public class OrdenCompraLineaJpaEntity extends BaseEntity {
 
 	public void setCantidadRecibida(BigDecimal cantidadRecibida) {
 		this.cantidadRecibida = cantidadRecibida;
-	}
-
-	public BigDecimal getPrecioUnitario() {
-		return precioUnitario;
-	}
-
-	public void setPrecioUnitario(BigDecimal precioUnitario) {
-		this.precioUnitario = precioUnitario;
 	}
 }

@@ -60,7 +60,7 @@ public class StockController {
 	public ResponseEntity<IngresoResponse> registrarIngreso(@Valid @RequestBody IngresoRequest request) {
 		Lote lote = registrarIngreso.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
 				request.itemId(), request.codigoLote(), request.fechaVencimiento(), request.cantidad(), request.motivo(),
-				request.proveedorId()));
+				request.proveedorId(), request.precioUnitario()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(IngresoResponse.from(lote));
 	}
 

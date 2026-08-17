@@ -12,6 +12,7 @@ public class Lote {
 	private LocalDate fechaIngreso;
 	private LocalDate fechaVencimiento;
 	private BigDecimal cantidadIngresada;
+	private BigDecimal precioUnitario;
 	private LoteEstado estado = LoteEstado.VIGENTE;
 
 	public Lote() {
@@ -79,6 +80,14 @@ public class Lote {
 
 	public void setCantidadIngresada(BigDecimal cantidadIngresada) {
 		this.cantidadIngresada = cantidadIngresada;
+	}
+
+	public BigDecimal getPrecioUnitario() {
+		return precioUnitario;
+	}
+
+	public void setPrecioUnitario(BigDecimal precioUnitario) {
+		this.precioUnitario = precioUnitario;
 	}
 
 	public LoteEstado getEstado() {

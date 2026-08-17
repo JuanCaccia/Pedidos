@@ -14,7 +14,7 @@
 ./mvnw test
 ```
 
-Runs from `backend/pedidos`. This executes **254 tests across 22 files**.
+Runs from `backend/pedidos`. This executes **265 tests across 21 files**.
 
 ### Unit tests (Mockito, per service)
 
@@ -52,6 +52,11 @@ Runs from `backend/pedidos`. This executes **254 tests across 22 files**.
 recepción/ingreso por CSV (`RecepcionCsvServiceTest`, `IngresoCsvServiceTest`),
 relación proveedor–item (`ProveedorServiceTest`), y zonas ABMC
 (`ZonaServiceTest`, `PedidosIntegrationTest`).
+
+**Cobertura de matriz de seguridad por rol (reestructuración Etapa 1):**
+- El repartidor **no** puede crear rutas ni asignar pedidos (solo `ADMIN`); verificado en `PedidosIntegrationTest`.
+- La cobranza del repartidor queda acotada a su ruta: sin `pedidoId` → `COBRANZA_REPARTIDOR_SIN_PEDIDO`; con `pedidoId` de otra ruta → `COBRANZA_PEDIDO_NO_EN_RUTA` (`CobranzaServiceTest`).
+- El ABMC de Zonas es solo `ADMINISTRATIVO`; `GET` permanece authenticated.
 
 ---
 

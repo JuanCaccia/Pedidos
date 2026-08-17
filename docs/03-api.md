@@ -42,10 +42,10 @@ role-based; see [05-seguridad.md](./05-seguridad.md) for the full matrix.
 ### Zona
 | Method | Path | Purpose | Role |
 |---|---|---|---|
-| POST | `/zonas` | Create zone | ENCARGADO_DEPOSITO, ADMIN |
-| PUT | `/zonas/{id}` | Update zone | ENCARGADO_DEPOSITO, ADMIN |
-| PATCH | `/zonas/{id}/desactivar` | Deactivate (soft) | ENCARGADO_DEPOSITO, ADMIN |
-| PATCH | `/zonas/{id}/reactivar` | Reactivate | ENCARGADO_DEPOSITO, ADMIN |
+| POST | `/zonas` | Create zone | ADMIN |
+| PUT | `/zonas/{id}` | Update zone | ADMIN |
+| PATCH | `/zonas/{id}/desactivar` | Deactivate (soft) | ADMIN |
+| PATCH | `/zonas/{id}/reactivar` | Reactivate | ADMIN |
 | GET | `/zonas/{id}` | Get zone | Authenticated |
 | GET | `/zonas` | List zones | Authenticated |
 
@@ -94,8 +94,8 @@ role-based; see [05-seguridad.md](./05-seguridad.md) for the full matrix.
 ### Ruta
 | Method | Path | Purpose | Role |
 |---|---|---|---|
-| POST | `/rutas` | Create route | REPARTIDOR, ADMIN |
-| POST | `/rutas/{id}/pedidos` | Assign orders | REPARTIDOR, ADMIN |
+| POST | `/rutas` | Create route | ADMIN (planificación de rutas) |
+| POST | `/rutas/{id}/pedidos` | Assign orders | ADMIN |
 | POST | `/rutas/{id}/iniciar` | Start route | REPARTIDOR, ADMIN |
 | POST | `/rutas/{id}/cerrar` | Close route | REPARTIDOR, ADMIN |
 | GET | `/rutas` | List routes | REPARTIDOR, ADMIN |
@@ -126,7 +126,7 @@ role-based; see [05-seguridad.md](./05-seguridad.md) for the full matrix.
 ### Cobranza
 | Method | Path | Purpose | Role |
 |---|---|---|---|
-| POST | `/cobranzas` | Record collection | VENDEDOR, ADMIN |
+| POST | `/cobranzas` | Record collection (REPARTIDOR exige `pedidoId` de su ruta) | VENDEDOR, ADMIN, REPARTIDOR |
 | GET | `/cobranzas` | List collections | Authenticated |
 | GET | `/cobranzas/clientes/{id}/cuenta` | Customer account balance | Authenticated |
 
@@ -237,6 +237,8 @@ Errors are centralized by a `GlobalExceptionHandler`. Every error returns an
 | `CLIENTE_INACTIVO` | Customer is deactivated |
 | `PROVEEDOR_INACTIVO` | Supplier is deactivated |
 | `COBRANZA_PEDIDO_INVALIDO` | Order not in a collectable state |
+| `COBRANZA_REPARTIDOR_SIN_PEDIDO` | REPARTIDOR sent a collection without `pedidoId` |
+| `COBRANZA_PEDIDO_NO_EN_RUTA` | `pedidoId` not in an active (non-finalized) route of the REPARTIDOR |
 | `ITEM_NO_PERTENECE_AL_PEDIDO` | Substitution item not in the order |
 | `PEDIDOS_EN_VIAJE` | Cannot close journey with in-transit orders |
 | `LOTE_YA_DESCARTADO` | Lot already discarded |
@@ -314,7 +316,7 @@ Response `200`:
 {
   "token": "<jwt>",
   "email": "admin@pedidos.com",
-  "roles": ["ADMINISTRATIVO", "VENDEDOR", "ENCARGADO_DEPOSITO", "REPARTIDOR"]
+  "roles": ["ADMINISTRATIVO"]
 }
 ```
 

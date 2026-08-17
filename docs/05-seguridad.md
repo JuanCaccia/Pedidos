@@ -62,25 +62,50 @@ user. Paths not listed fall back to **authenticated**.
 | `/notificaciones/**` | `ADMIN`, `ENCARGADO_DEPOSITO` |
 | `POST /stock/*` | `ENCARGADO_DEPOSITO`, `ADMIN` |
 | `/stock/ingresos/csv`, `/ordenes-compra/{id}/recepciones/csv` | `ENCARGADO_DEPOSITO`, `ADMIN` |
-| `/rutas/**` | `REPARTIDOR`, `ADMIN` |
+| `POST /rutas`, `POST /rutas/{id}/pedidos` | `ADMIN` (planificación de rutas = Logística/Admin) |
+| `POST /rutas/{id}/iniciar`, `POST /rutas/{id}/cerrar`, `GET /rutas/**` | `REPARTIDOR`, `ADMIN` |
 | `/reportes/stock` (+ CSV) | `ENCARGADO_DEPOSITO`, `ADMIN` |
 | `/reportes/**` (rest) | `ADMIN` |
 | `POST/PUT /items` | `ENCARGADO_DEPOSITO`, `ADMIN` |
 | `/categorias`: GET | authenticated |
 | `/categorias`: POST/PUT/PATCH | `ENCARGADO_DEPOSITO`, `ADMIN` |
 | `/clientes`: POST/PUT/PATCH | `VENDEDOR`, `ADMIN` |
-| `POST /cobranzas` | `VENDEDOR`, `ADMIN` |
+| `POST /cobranzas` | `VENDEDOR`, `ADMIN`, `REPARTIDOR` (ver nota) |
 | `/proveedores`, `/ordenes-compra/**` | `ENCARGADO_DEPOSITO`, `ADMIN` |
 | `/proveedores/{id}/items` | `ENCARGADO_DEPOSITO`, `ADMIN` |
 | `/zonas`: GET | authenticated |
-| `/zonas`: POST/PUT/PATCH | `ENCARGADO_DEPOSITO`, `ADMIN` |
+| `/zonas`: POST/PUT/PATCH | `ADMIN` |
 | `POST /sustituciones` | `REPARTIDOR`, `ADMIN` |
 | `/actuator/**` | `ADMIN` |
 | `POST /test/reset` | Public (`permitAll`) — **active ONLY in `dev`/`test`; NOT registered in `prod`** |
 | Everything else | authenticated |
 
-> Note: users may hold multiple roles. The demo `admin@pedidos.com` carries all
-> four roles, which is why it can access every area.
+### Cobranzas del repartidor
+
+`POST /cobranzas` habilita a `REPARTIDOR`, pero acotado a su ruta: si el actor
+es `REPARTIDOR` el request **exige** `pedidoId`, y ese pedido debe pertenecer a
+una ruta del repartidor que aún NO esté finalizada. De lo contrario devuelve:
+
+- `COBRANZA_REPARTIDOR_SIN_PEDIDO` — el repartidor envió cobranza sin `pedidoId`.
+- `COBRANZA_PEDIDO_NO_EN_RUTA` — el `pedidoId` no pertenece a una ruta activa del repartidor.
+
+El `VENDEDOR` y el `ADMIN` siguen pudiendo cobrar directo (con `clienteId`; `pedidoId` opcional).
+
+### Usuarios seed
+
+`DataSeeder` provee un usuario por rol, todos de rol único (a diferencia del
+modelo anterior en que `admin` concentraba los cuatro):
+
+| Email | Rol |
+|---|---|
+| `admin@pedidos.com` | `ADMINISTRATIVO` (solo) |
+| `vendedor@pedidos.com` | `VENDEDOR` |
+| `deposito@pedidos.com` | `ENCARGADO_DEPOSITO` |
+| `repartidor@pedidos.com` | `REPARTIDOR` |
+
+> Note: the app supports multiple roles per user, but the seed data deliberately
+> gives each demo account a single role so role-based behavior is exercised in
+> isolation.
 
 ---
 

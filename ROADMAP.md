@@ -11,14 +11,17 @@
   `pedido` (circuito con `PENDIENTE_STOCK`, pedido hijo), `ruta` (despacho +
   asignación), `compra` (proveedores + OC con recepción → stock), `cobranza`
   (remitos + cobranzas + cuenta de cliente), `reporte` (stock/ventas/rutas/caja),
-  `sustitucion`, `notificacion`, seguridad JWT + BCrypt, auditoría, springdoc, actuator (health/info/metrics). **204 tests**.
+  `sustitucion`, `notificacion`, seguridad JWT + BCrypt, auditoría, springdoc, actuator (health/info/metrics). **265 tests**.
 - **Frontend** completo: login, Dashboard (alertas: stock bajo, pendientes,
   re-agendados, lotes por vencer), Pedidos (cliente+zona, acciones por rol),
   Stock (operativo), Clientes/Items/Usuarios/Proveedores (ABMC), Rutas +
   Entregas, Órdenes de Compra, Cobranzas + Caja. Next.js 16 + Tailwind v4,
   auditado con Impeccable.
-- Migraciones Flyway V1→V19 · Dockerfile backend/frontend + compose · CI en
+- Migraciones Flyway V1→V22 · Dockerfile backend/frontend + compose · CI en
   GitHub Actions · App local en containers Podman (`:8080/api` + `:3000`).
+- **Reestructuración de roles y UI COMPLETA** (Etapas 1 y 2): matriz de
+  autorización por rol redefinida (rutas/Zonas/Cobranzas) + barra lateral por
+  rol, tabs de Categorías/Zonas y wizard del repartidor en `/turno`. **265 tests backend.**
 - Observabilidad base (D3): `/actuator/health` público (con liveness/readiness y detalles DB por rol), `/actuator/info` solo `ADMINISTRATIVO`. — ✅ Hardening: `/actuator/metrics` y `/actuator/prometheus` (micrometer) también solo `ADMINISTRATIVO`.
 
 ---
@@ -117,4 +120,31 @@ Deuda técnica no bloqueante resuelta + preparación para producción real (2026
 ### H3 — Docker healthchecks ✅ COMPLETA
 - HEALTHCHECK backend (→ `/api/actuator/health`) y frontend (→ `/login`); compose con healthchecks y `frontend.depends_on.backend.condition: service_healthy`.
 
-Suite: **204 tests backend (19 archivos)** + **8 E2E (6 specs)** + build frontend verde.
+Suite: **265 tests backend (21 archivos)** + **8 E2E (6 specs)** + build frontend verde.
+
+---
+
+## Reestructuración de roles y UI ✅ COMPLETO (2026-08-17)
+
+### Etapa 1 — Autorización por rol (backend)
+- **Rutas:** `POST /rutas` y `POST /rutas/{id}/pedidos` → solo `ADMINISTRATIVO`
+  (planificación de Logística/Admin); `iniciar`/`cerrar`/`GET` → `REPARTIDOR`+`ADMINISTRATIVO`.
+- **Zonas:** ABMC (POST/PUT/PATCH) → solo `ADMINISTRATIVO`; `GET` authenticated.
+- **Cobranzas:** `POST /cobranzas` → `VENDEDOR`+`ADMINISTRATIVO`+`REPARTIDOR`. Si el actor
+  es `REPARTIDOR` exige `pedidoId` de una ruta propia NO finalizada
+  (`COBRANZA_REPARTIDOR_SIN_PEDIDO`, `COBRANZA_PEDIDO_NO_EN_RUTA`).
+- **DataSeeder:** `admin@pedidos.com` pasa a rol único `ADMINISTRATIVO`; nuevos
+  `vendedor@pedidos.com` (VENDEDOR) y `deposito@pedidos.com` (ENCARGADO_DEPOSITO).
+
+### Etapa 2 — UI por rol (frontend)
+- Barra lateral declarativa por rol (REPARTIDOR solo "Mi Jornada"; VENDEDOR
+  Panel/Pedidos/Clientes/Catálogo/Cobranzas; ENCARGADO_DEPOSITO Panel/Pedidos/Stock/Items/
+  Clientes/Proveedores/Compras; ADMIN todo agrupado).
+- Categorías como pestaña en `/items`; Zonas como pestaña en `/clientes` (solo ADMIN).
+- `/turno` = wizard del repartidor (Antes de salir → En viaje con paradas
+  [entregar/cobrar/sustituir/reagendar/rechazar] → Rendición/Cerrar).
+- Dashboard role-aware (sin 403 para VENDEDOR/ENCARGADO).
+
+### Fixes
+- Fechas `YYYY-MM-DD` como local (no UTC) en `format.ts`.
+- `CobranzaRequest.clienteId` `@NotNull` → 400 en vez de 500.

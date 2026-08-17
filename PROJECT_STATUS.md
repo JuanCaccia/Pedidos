@@ -1,6 +1,6 @@
 # Project Status — Sistema de Pedidos, Stock y Ventas
 
-> **Fecha:** 2026-08-17. **Autor:** cierre formal de milestone + cierre de Fase D (D1-D4) + cierre de Hardening de Producción + 4 bloques de mejoras.
+> **Fecha:** 2026-08-17. **Autor:** cierre formal de milestone + cierre de Fase D (D1-D4) + cierre de Hardening de Producción + 4 bloques de mejoras + reestructuración de roles y UI (Etapas 1 y 2).
 > Este documento describe el estado **verificado real** del proyecto, no aspiraciones.
 
 ## Current Milestone
@@ -11,7 +11,7 @@
 
 ## Status
 
-**COMPLETA / VERIFICADA — Backend 254 tests + E2E Playwright 8 tests en verde; Hardening de Producción cerrado; Fase D cerrada; Bloques P1.A, P1.B, P2.A y P2.B de saneamiento aplicados y verificados; 4 bloques de mejoras de compra/stock aplicados y verificados.**
+**COMPLETA / VERIFICADA — Backend 265 tests + E2E Playwright 8 tests en verde; Hardening de Producción cerrado; Fase D cerrada; Bloques P1.A, P1.B, P2.A y P2.B de saneamiento aplicados y verificados; 4 bloques de mejoras de compra/stock aplicados y verificados; reestructuración de roles (Etapa 1) y UI por rol (Etapa 2) aplicadas y verificadas.**
 
 ## Milestone Objective
 
@@ -25,7 +25,7 @@ TTL de reservas, consolidación, export CSV).
 
 La mayoría de los flujos centrales **funcionan y son consistentes** entre backend y frontend
 (ciclo de pedido, consolidación, OC/recepción, cobranzas, faltantes+notificaciones, CSV,
-TTL config). Backend: **254 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
+TTL config). Backend: **265 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
 Los dos bloqueantes P1 de C8 (BUG-002 autorización, BUG-003 sustitución con diferencia
 negativa) fueron **resueltos y verificados en vivo**. Persisten como P1: BUG-004 (cierre de
 jornada con EN_VIAJE colgados) y BUG-005 (decisión de alcance "pedido express"). Además
@@ -51,7 +51,7 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 | C4 Tabs con contadores en Pedidos | sí | sí | sí | sí | /pedidos/contadores, tests |
 | C5 Drawer + despacho lote + friction | sí | parcial | sí | parcial | Drawer/ConfirmacionFrictionada, sin tests FE |
 | C6 Capacidad de rutas | sí | sí | sí | sí | V13, validarCapacidad, tests |
-| C7 PWA repartidor /turno | sí | parcial | parcial | parcial | manifest, SwipeButton, turno; sin tests FE, sin drive visual |
+| C7 PWA repartidor /turno | sí | sí | parcial | parcial | manifest, SwipeButton, wizard /turno (3 fases); sin tests FE, sin drive visual |
 | C8.1 Pedido express + alerta "en ruta hoy" | parcial | parcial | parcial | parcial | alerta presente; **"express" NO implementado** (BUG-005); alerta sin acotar a hoy (QA-08) |
 | C8.2 Marcar faltante/dañado + notificaciones | sí | sí | sí | sí (backend) / parcial (visual) | 200, merma, notif no-leída, /no-leidas |
 | C8.3 Sustitución en destino / cierre camión | sí | sí | sí | **sí** | BUG-003 resuelto+verificado (201 dif. negativa); resta QA-09 (UI en turno) |
@@ -61,7 +61,7 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 
 ## Completed
 
-* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (254 tests verdes).
+* Backend F0→F6 + B1→B5 + C1→C8 + D1→D4 implementado y compilando (265 tests verdes).
 * Frontend Next.js 16.3 completo (login, dashboard, pedidos, stock, clientes/items/usuarios/
   proveedores, rutas+entregas, OC, cobranzas+caja, turno) — build OK.
 * Migraciones Flyway V1→V22 validadas.
@@ -89,6 +89,10 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
   - **Relación proveedor↔item** (`V21__proveedor_item.sql`, catálogo de provisión): `PUT/GET /proveedores/{id}/items`, validación de OC con `ITEM_NO_PROVISTO_POR_PROVEEDOR`, auto-vinculación en recepción.
   - **OC sin precio**: las líneas de OC llevan solo item+cantidad; el precio real se captura en la recepción (obligatorio) y en el ingreso manual (opcional), persistiendo en `lote.precio_unitario` (`V22__precio_oc_lote.sql`).
   - **Importación CSV de recepción**: `POST /stock/ingresos/csv` (sin OC, proveedorId opcional) y `POST /ordenes-compra/{id}/recepciones/csv` (vinculada a OC); formato `sku;cantidad;precioUnitario;fechaVencimiento;codigoLote`; errores por fila (400, transaccional). Frontend: botones de importación CSV.
+- **Reestructuración de roles y UI aplicada y verificada (2026-08-17, Etapas 1 y 2):**
+  - **Etapa 1 — Autorización por rol (backend):** rutas (creación/asignación de pedidos solo `ADMINISTRATIVO`; iniciar/cerrar/get `REPARTIDOR`+`ADMIN`), Zonas (ABMC solo `ADMINISTRATIVO`; `GET` authenticated), y Cobranzas (`VENDEDOR`+`ADMIN`+`REPARTIDOR`, con exigencia de `pedidoId` de una ruta propia NO finalizada para el repartidor — `COBRANZA_REPARTIDOR_SIN_PEDIDO` / `COBRANZA_PEDIDO_NO_EN_RUTA`). `DataSeeder`: `admin@pedidos.com` pasa a rol único `ADMINISTRATIVO`; se agregan `vendedor@pedidos.com` (VENDEDOR) y `deposito@pedidos.com` (ENCARGADO_DEPOSITO); `repartidor@pedidos.com` (REPARTIDOR). Matriz de seguridad cubierta por tests por rol.
+  - **Etapa 2 — UI por rol (frontend):** barra lateral declarativa por rol (REPARTIDOR solo "Mi Jornada"; VENDEDOR Panel/Pedidos/Clientes/Catálogo/Cobranzas; ENCARGADO_DEPOSITO Panel/Pedidos/Stock/Items/Clientes/Proveedores/Compras; ADMIN todo agrupado). Categorías como pestaña en `/items`; Zonas como pestaña en `/clientes` (solo ADMIN). `/turno` = wizard del repartidor (Antes de salir → En viaje con paradas [entregar/cobrar/sustituir/reagendar/rechazar] → Rendición/Cerrar). Dashboard role-aware sin 403 para VENDEDOR/ENCARGADO.
+  - **Fixes:** fechas `YYYY-MM-DD` como local (no UTC) en `format.ts`; `CobranzaRequest.clienteId` `@NotNull` (400 en vez de 500). **265 tests backend + build frontend verde; Flyway V22.**
 - **Hardening de Producción aplicado y verificado (2026-08-16):**
   - STR-004: `listarPaginado` ordena toda consulta deterministamente (`express DESC, fechaCreacion DESC, id ASC`, null-safe); test `listarColaConfirmacionOrdenaDeterminista`.
   - STR-005: `POST /api/test/reset` (dev/test) con `TRUNCATE CASCADE` de 20 tablas + reseed; `globalSetup` en Playwright; no existe en prod (test `TestResetNoExisteEnProdTest`).
@@ -102,7 +106,7 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 * C8.1 pedido "express" (solo alerta, sin flag) — BUG-005.
 * C8.3 sustitución (solo diferencia positiva, solo ENTREGADO, sin UI turno) — BUG-003, QA-09.
 * C8.4 TTL auto-cancel 48h (config+tests presentes; comportamiento temporal no verificado E2E).
-* C7 PWA / turno (sin tests frontend, sin verificación visual).
+* C7 PWA / turno — el **wizard del repartidor** (3 fases: Antes de salir → En viaje con paradas → Rendición/Cerrar) ya está implementado en `/turno`; quedan pendientes tests frontend y verificación visual.
 
 ## Known Bugs
 
@@ -134,6 +138,8 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 * `GlobalExceptionHandler` no mapea 404/405 → 500 (QA-01). — ✅ resuelto (404/405/415 mapeados).
 * Validación anidada inconsistente entre requests (`@Valid` faltante en varios). — ✅ resuelto (STR-006).
 * Frontend usa `size=500` sin paginar en turno y alertas (riesgo a gran escala) — QA-08/QA-10.
+* ~5 warnings ESLint `react-hooks/set-state-in-effect` (patrón setState en efecto en algunos componentes del frontend) — pendiente de corregir.
+* `pedidoPerteneceARepartidor` filtra en memoria (recupera los pedidos de la ruta y valida pertenencia en Java); a futuro una query dedicada (¿query por ruta + repartidor + estado no finalizado) evitaría el barrido en memoria.
 * Duplicación de lógica de recepción CSV entre `POST /stock/ingresos/csv` y `POST /ordenes-compra/{id}/recepciones/csv` — **refactor opcional** (unificar el pipeline de parseo+persistencia).
 * Frontend completo **sin versionar** de forma reproducible (STR-001) — P1, pendiente.
 * Sin tests frontend.
@@ -182,7 +188,7 @@ completed: yes (subagente + verificación manual de bloqueantes)
 result: 2 bloqueantes (BUG-002, BUG-003) RESUELTOS y verificados + 13 hallazgos (QA-01..13) + STR
 
 Automated tests:
-- Backend: **254 tests, 0 fallos** (surefire) en 22 archivos.
+- Backend: **265 tests, 0 fallos** (surefire) en 21 archivos.
 - Frontend: **sin tests unitarios; E2E con Playwright: 8 tests verdes, estable como gate de CI** (`npm run test:e2e`); `globalSetup` resetea la DB (`POST /api/test/reset`) para corridas reproducibles.
 
 End-to-end verification:

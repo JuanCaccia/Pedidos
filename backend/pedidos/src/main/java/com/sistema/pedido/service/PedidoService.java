@@ -27,8 +27,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -395,12 +397,24 @@ public class PedidoService implements CrearPedido, ConfirmarPedido, GestionarEnt
 	}
 
 	@Override
+	public List<Pedido> listarPorIds(Collection<Long> ids) {
+		return pedidoRepository.findByIds(ids);
+	}
+
+	@Override
 	public Map<EstadoPedido, Long> contadores() {
 		Map<EstadoPedido, Long> resultado = new LinkedHashMap<>();
 		for (EstadoPedido estado : EstadoPedido.values()) {
 			resultado.put(estado, pedidoRepository.contarPorEstado(estado));
 		}
 		return resultado;
+	}
+
+	@Override
+	public PageResponse<Pedido> listarPaginadoPorEstadoYFecha(EstadoPedido estado, LocalDate fechaJornada, int page,
+			int size) {
+		List<Pedido> todos = pedidoRepository.findByEstadoAndFechaJornada(estado, fechaJornada);
+		return paginar(todos, page, size);
 	}
 
 	@Override

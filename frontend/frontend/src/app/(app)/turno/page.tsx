@@ -18,6 +18,7 @@ import ErrorBox from "@/components/ErrorBox";
 import Button from "@/components/Button";
 import ConfirmacionFrictionada from "@/components/ConfirmacionFrictionada";
 import SwipeButton from "@/components/SwipeButton";
+import SustitucionModal from "@/components/SustitucionModal";
 
 const ALLOWED_ROLES = ["REPARTIDOR", "ADMINISTRATIVO"];
 
@@ -43,6 +44,8 @@ export default function TurnoPage() {
   const [rechazarOpen, setRechazarOpen] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [alertaAdicionalDismissed, setAlertaAdicionalDismissed] = useState(false);
+  const [adicionales, setAdicionales] = useState<Pedido[]>([]);
+  const [sustituirOpen, setSustituirOpen] = useState(false);
 
   const repartidorId = user?.usuarioId;
 
@@ -57,12 +60,19 @@ export default function TurnoPage() {
     }
   }, [repartidorId]);
 
-  const loadPedidos = useCallback(async () => {
+  const loadRoutePedidos = useCallback(async (ids: number[]) => {
+    setLoading(true);
     try {
-      const data = await apiGet<PageResponse<Pedido>>("/api/pedidos?size=500");
+      if (ids.length === 0) {
+        setPedidos([]);
+        return;
+      }
+      const data = await apiGet<PageResponse<Pedido>>(`/api/pedidos?ids=${ids.join(",")}`);
       setPedidos(data.content);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -89,9 +99,10 @@ export default function TurnoPage() {
     setParcialOpen(false);
     setRechazarOpen(false);
     setAlertaAdicionalDismissed(false);
-    await Promise.all([loadPedidos(), loadRutas()]);
+    setSustituirOpen(false);
+    await loadRutas();
     setQueueIndex(0);
-  }, [loadPedidos, loadRutas]);
+  }, [loadRutas]);
 
   useEffect(() => {
     if (repartidorId == null) return;
@@ -100,7 +111,7 @@ export default function TurnoPage() {
       setLoading(true);
       setError(null);
       try {
-        await Promise.all([loadRutas(), loadPedidos(), loadClientes(), loadZonas()]);
+        await Promise.all([loadRutas(), loadClientes(), loadZonas()]);
       } catch {
         // los loaders ya capturan el error
       } finally {
@@ -110,7 +121,7 @@ export default function TurnoPage() {
     return () => {
       active = false;
     };
-  }, [repartidorId, loadRutas, loadPedidos, loadClientes, loadZonas]);
+  }, [repartidorId, loadRutas, loadClientes, loadZonas]);
 
   useEffect(() => {
     if (didAutoSelect.current || rutas.length === 0 || selectedRutaId != null) return;
@@ -149,6 +160,14 @@ export default function TurnoPage() {
     [rutas, selectedRutaId]
   );
 
+  useEffect(() => {
+    if (!selectedRuta) {
+      setPedidos([]);
+      return;
+    }
+    void loadRoutePedidos(selectedRuta.pedidoIds);
+  }, [selectedRuta, loadRoutePedidos]);
+
   const routePedidos = useMemo(() => {
     if (!selectedRuta) return [] as Pedido[];
     return selectedRuta.pedidoIds
@@ -173,14 +192,39 @@ export default function TurnoPage() {
     () => new Set(enViaje.map((p) => p.clienteId)),
     [enViaje]
   );
+  const enViajeClienteKey = useMemo(
+    () => [...enViajeClienteIds].sort().join(","),
+    [enViajeClienteIds]
+  );
+
+  useEffect(() => {
+    if (enViajeClienteIds.size === 0) {
+      setAdicionales([]);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const acumulados: Pedido[] = [];
+      for (const clienteId of enViajeClienteIds) {
+        try {
+          const data = await apiGet<PageResponse<Pedido>>(
+            `/api/pedidos?clienteId=${clienteId}&size=100`
+          );
+          acumulados.push(...data.content);
+        } catch {
+          // Los pedidos adicionales son una alerta complementaria
+        }
+      }
+      if (active) setAdicionales(acumulados);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [enViajeClienteKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pedidosAdicionales = useMemo(
-    () =>
-      pedidos.filter(
-        (p) =>
-          p.estado === "PENDIENTE_CONFIRMACION" && enViajeClienteIds.has(p.clienteId)
-      ),
-    [pedidos, enViajeClienteIds]
+    () => adicionales.filter((p) => p.estado === "PENDIENTE_CONFIRMACION"),
+    [adicionales]
   );
 
   const pedidosAdicionalesPorCliente = useMemo(() => {
@@ -407,6 +451,11 @@ export default function TurnoPage() {
                   setMutating(false);
                 }
               }}
+              onSustituir={() => {
+                if (!current) return;
+                setError(null);
+                setSustituirOpen(true);
+              }}
               onRechazar={() => {
                 if (!current) return;
                 setError(null);
@@ -487,6 +536,17 @@ export default function TurnoPage() {
             }
           }}
           onClose={() => setRechazarOpen(false)}
+        />
+      )}
+
+      {sustituirOpen && current && (
+        <SustitucionModal
+          pedido={current}
+          onClose={() => setSustituirOpen(false)}
+          onConfirm={async () => {
+            setSustituirOpen(false);
+            await refresh();
+          }}
         />
       )}
     </div>
@@ -673,6 +733,7 @@ function BottomActionBar({
   onEntregarTotal,
   onEntregarParcial,
   onReagendar,
+  onSustituir,
   onRechazar,
   onCerrar,
 }: {
@@ -681,6 +742,7 @@ function BottomActionBar({
   onEntregarTotal: () => void | Promise<void>;
   onEntregarParcial: () => void;
   onReagendar: () => void | Promise<void>;
+  onSustituir: () => void;
   onRechazar: () => void;
   onCerrar?: () => void | Promise<void>;
 }) {
@@ -708,7 +770,7 @@ function BottomActionBar({
           onConfirm={onEntregarTotal}
           disabled={disabled || mutating}
         />
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <Button
             variant="secondary"
             className="h-14 py-4 text-sm"
@@ -724,6 +786,14 @@ function BottomActionBar({
             onClick={() => void onReagendar()}
           >
             Re-agendar
+          </Button>
+          <Button
+            variant="secondary"
+            className="h-14 py-4 text-sm"
+            disabled={disabled || mutating}
+            onClick={onSustituir}
+          >
+            Sustituir
           </Button>
           <Button
             variant="secondary"

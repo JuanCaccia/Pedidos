@@ -22,8 +22,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -135,6 +137,44 @@ class PedidoServiceTest {
 		assertEquals(1, pagina1.content().size());
 		assertEquals(3, pagina0.totalElements());
 		assertEquals(2, pagina0.totalPages());
+	}
+
+	@Test
+	void listarPaginadoPorEstadoYFechaFiltraPorAmbos() {
+		Pedido enViajeHoy = crearPedido(10L, new BigDecimal("1.000"));
+		enViajeHoy.setEstado(EstadoPedido.EN_VIAJE);
+		enViajeHoy.setFechaJornada(LocalDate.of(2026, 8, 16));
+		pedidoRepository.save(enViajeHoy);
+
+		Pedido enViajeOtroDia = crearPedido(11L, new BigDecimal("1.000"));
+		enViajeOtroDia.setEstado(EstadoPedido.EN_VIAJE);
+		enViajeOtroDia.setFechaJornada(LocalDate.of(2026, 8, 15));
+		pedidoRepository.save(enViajeOtroDia);
+
+		Pedido otroEstadoHoy = crearPedido(12L, new BigDecimal("1.000"));
+		otroEstadoHoy.setEstado(EstadoPedido.PENDIENTE_PREPARACION);
+		otroEstadoHoy.setFechaJornada(LocalDate.of(2026, 8, 16));
+		pedidoRepository.save(otroEstadoHoy);
+
+		com.sistema.common.model.PageResponse<Pedido> pagina = pedidoService
+				.listarPaginadoPorEstadoYFecha(EstadoPedido.EN_VIAJE, LocalDate.of(2026, 8, 16), 0, 20);
+
+		assertEquals(1, pagina.totalElements());
+		assertEquals(enViajeHoy.getId(), pagina.content().get(0).getId());
+	}
+
+	@Test
+	void listarPorIdsDevuelveSoloLosPedidosSolicitados() {
+		Pedido a = crearPedido(10L, new BigDecimal("1.000"));
+		Pedido b = crearPedido(11L, new BigDecimal("1.000"));
+		Pedido c = crearPedido(12L, new BigDecimal("1.000"));
+
+		List<Pedido> resultado = pedidoService.listarPorIds(List.of(a.getId(), c.getId()));
+
+		assertEquals(2, resultado.size());
+		assertTrue(resultado.stream().anyMatch(p -> p.getId().equals(a.getId())));
+		assertTrue(resultado.stream().anyMatch(p -> p.getId().equals(c.getId())));
+		assertFalse(resultado.stream().anyMatch(p -> p.getId().equals(b.getId())));
 	}
 
 	@Test
@@ -622,6 +662,17 @@ class PedidoServiceTest {
 		@Override
 		public List<Pedido> findByPedidoPadreId(Long pedidoPadreId) {
 			return datos.values().stream().filter(p -> pedidoPadreId.equals(p.getPedidoPadreId())).toList();
+		}
+
+		@Override
+		public List<Pedido> findByEstadoAndFechaJornada(EstadoPedido estado, LocalDate fechaJornada) {
+			return datos.values().stream()
+					.filter(p -> p.getEstado() == estado && fechaJornada.equals(p.getFechaJornada())).toList();
+		}
+
+		@Override
+		public List<Pedido> findByIds(Collection<Long> ids) {
+			return datos.values().stream().filter(p -> p.getId() != null && ids.contains(p.getId())).toList();
 		}
 	}
 

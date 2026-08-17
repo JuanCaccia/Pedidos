@@ -5,6 +5,8 @@ import com.sistema.pedido.model.Pedido;
 import com.sistema.pedido.port.out.PedidoRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -58,5 +60,15 @@ public class PedidoRepositoryAdapter implements PedidoRepository {
 	@Override
 	public List<Pedido> findByPedidoPadreId(Long pedidoPadreId) {
 		return jpaRepository.findByPedidoPadreId(pedidoPadreId).stream().map(mapper::toDomain).toList();
+	}
+
+	@Override
+	public List<Pedido> findByEstadoAndFechaJornada(EstadoPedido estado, LocalDate fechaJornada) {
+		return jpaRepository.findByEstadoAndFechaJornada(estado, fechaJornada).stream().map(mapper::toDomain).toList();
+	}
+
+	@Override
+	public List<Pedido> findByIds(Collection<Long> ids) {
+		return jpaRepository.findByIdIn(ids).stream().map(mapper::toDomain).toList();
 	}
 }

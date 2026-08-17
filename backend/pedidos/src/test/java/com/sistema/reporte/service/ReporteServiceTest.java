@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -303,6 +304,11 @@ class ReporteServiceTest {
 		}
 
 		@Override
+		public List<Pedido> listarPorIds(Collection<Long> ids) {
+			return pedidos.stream().filter(p -> p.getId() != null && ids.contains(p.getId())).toList();
+		}
+
+		@Override
 		public Map<EstadoPedido, Long> contadores() {
 			return Map.of();
 		}
@@ -320,6 +326,18 @@ class ReporteServiceTest {
 			} else {
 				todos = listarTodos();
 			}
+			int total = todos.size();
+			int from = Math.min(page * size, total);
+			int to = Math.min(from + size, total);
+			int totalPages = size == 0 ? 0 : (total + size - 1) / size;
+			return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
+		}
+
+		@Override
+		public PageResponse<Pedido> listarPaginadoPorEstadoYFecha(EstadoPedido estado, LocalDate fechaJornada,
+				int page, int size) {
+			List<Pedido> todos = pedidos.stream()
+					.filter(p -> p.getEstado() == estado && fechaJornada.equals(p.getFechaJornada())).toList();
 			int total = todos.size();
 			int from = Math.min(page * size, total);
 			int to = Math.min(from + size, total);

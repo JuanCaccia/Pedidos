@@ -41,7 +41,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -178,7 +180,21 @@ public class PedidoController {
 	@GetMapping
 	public ResponseEntity<PageResponse<PedidoResponse>> listar(@RequestParam(required = false) String estado,
 			@RequestParam(required = false) Long clienteId, @RequestParam(required = false) Long vendedorId,
+			@RequestParam(required = false) String ids, @RequestParam(required = false) LocalDate fechaJornada,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+		if (ids != null && !ids.isBlank()) {
+			List<Long> idsList;
+			try {
+				idsList = Arrays.stream(ids.split(",")).map(String::trim).map(Long::valueOf).toList();
+			} catch (NumberFormatException e) {
+				return ResponseEntity.badRequest().build();
+			}
+			List<Pedido> pedidos = consultarPedido.listarPorIds(idsList);
+			PageResponse<PedidoResponse> respuesta = new PageResponse<>(
+					pedidos.stream().map(PedidoResponse::from).toList(), page, size, pedidos.size(),
+					pedidos.isEmpty() ? 0 : 1);
+			return ResponseEntity.ok(respuesta);
+		}
 		EstadoPedido estadoEnum = null;
 		if (estado != null) {
 			try {
@@ -186,6 +202,13 @@ public class PedidoController {
 			} catch (IllegalArgumentException e) {
 				return ResponseEntity.badRequest().build();
 			}
+		}
+		if (estadoEnum != null && fechaJornada != null) {
+			PageResponse<Pedido> pagina = consultarPedido.listarPaginadoPorEstadoYFecha(estadoEnum, fechaJornada, page, size);
+			PageResponse<PedidoResponse> respuesta = new PageResponse<>(
+					pagina.content().stream().map(PedidoResponse::from).toList(),
+					pagina.page(), pagina.size(), pagina.totalElements(), pagina.totalPages());
+			return ResponseEntity.ok(respuesta);
 		}
 		PageResponse<Pedido> pagina = consultarPedido.listarPaginado(estadoEnum, clienteId, vendedorId, page, size);
 		PageResponse<PedidoResponse> respuesta = new PageResponse<>(

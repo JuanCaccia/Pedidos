@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api";
-import type { ApiError, Categoria, Cliente, Item, Pedido, PedidoItem, EstadoPedido, PageResponse, Sustitucion } from "@/lib/types";
+import type { ApiError, Categoria, Cliente, Item, Pedido, PedidoItem, EstadoPedido, PageResponse } from "@/lib/types";
 import { formatDateTime, formatMoney, formatNumber } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import EstadoBadge from "@/components/EstadoBadge";
@@ -15,6 +15,7 @@ import Drawer from "@/components/Drawer";
 import Modal from "@/components/Modal";
 import ConfirmacionFrictionada from "@/components/ConfirmacionFrictionada";
 import Combobox from "@/components/Combobox";
+import SustitucionModal from "@/components/SustitucionModal";
 import { useToast } from "@/components/Toast";
 import { IconClose } from "@/components/icons";
 import { exportarCSV } from "@/lib/export";
@@ -119,8 +120,22 @@ function PedidosPageInner() {
 
   const loadEnViajeClientes = useCallback(async () => {
     try {
-      const data = await apiGet<PageResponse<Pedido>>("/api/pedidos?estado=EN_VIAJE&size=500");
-      setEnViajeClienteIds(new Set(data.content.map((p) => p.clienteId)));
+      const now = new Date();
+      const hoy = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+        now.getDate()
+      ).padStart(2, "0")}`;
+      const ids = new Set<number>();
+      let page = 0;
+      let totalPages = 1;
+      while (page < totalPages) {
+        const data = await apiGet<PageResponse<Pedido>>(
+          `/api/pedidos?estado=EN_VIAJE&fechaJornada=${hoy}&page=${page}&size=100`
+        );
+        for (const p of data.content) ids.add(p.clienteId);
+        totalPages = data.totalPages;
+        page += 1;
+      }
+      setEnViajeClienteIds(ids);
     } catch {
       setEnViajeClienteIds(new Set());
     }
@@ -772,7 +787,7 @@ function PedidoDetalle({
         <Button variant="secondary" onClick={onVerHijos}>
           Ver hijos
         </Button>
-        {(pedido.estado === "ENTREGADO" || pedido.estado === "ENTREGADO_PARCIAL") &&
+        {(pedido.estado === "ENTREGADO" || pedido.estado === "ENTREGADO_PARCIAL" || pedido.estado === "EN_VIAJE") &&
           hasAnyRole("REPARTIDOR", "ADMINISTRATIVO") && (
             <Button variant="secondary" onClick={onSustituir}>
               Sustituir item
@@ -904,173 +919,6 @@ function MarcarFaltanteModal({
           </Button>
           <Button type="submit" disabled={submitting}>
             {submitting ? "Guardando..." : "Marcar faltante"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function SustitucionModal({
-  pedido,
-  onClose,
-  onConfirm,
-}: {
-  pedido: Pedido;
-  onClose: () => void;
-  onConfirm: () => Promise<void> | void;
-}) {
-  const lineasEntregadas = useMemo(
-    () => pedido.items.filter((it) => it.cantidadEntregada > 0),
-    [pedido.items]
-  );
-
-  const [itemOriginalId, setItemOriginalId] = useState<number | null>(
-    lineasEntregadas[0]?.itemId ?? null
-  );
-  const [itemSustitutoId, setItemSustitutoId] = useState<number | null>(null);
-  const [cantidad, setCantidad] = useState("");
-  const [observaciones, setObservaciones] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const lineaOriginal = lineasEntregadas.find((it) => it.itemId === itemOriginalId) ?? null;
-  const cantidadMax = lineaOriginal?.cantidadEntregada ?? 0;
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (submitting) return;
-    setError(null);
-
-    if (itemOriginalId == null) {
-      setError("Seleccioná el item entregado.");
-      return;
-    }
-    if (itemSustitutoId == null) {
-      setError("Seleccioná el item sustituto.");
-      return;
-    }
-    if (itemSustitutoId === itemOriginalId) {
-      setError("El item sustituto debe ser distinto del item entregado.");
-      return;
-    }
-    const cantidadNum = Number(cantidad);
-    if (!cantidad || Number.isNaN(cantidadNum) || cantidadNum <= 0) {
-      setError("Ingresá una cantidad mayor a cero.");
-      return;
-    }
-    if (cantidadNum > cantidadMax) {
-      setError(`La cantidad no puede superar la entregada (${formatNumber(cantidadMax)}).`);
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await apiPost<Sustitucion>("/api/sustituciones", {
-        pedidoId: pedido.id,
-        itemOriginalId,
-        itemSustitutoId,
-        cantidad: cantidadNum,
-        observaciones: observaciones.trim() || undefined,
-      });
-      await onConfirm();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error inesperado");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal title={`Sustituir item · pedido ${pedido.numero}`} onClose={onClose} width="md">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="sustitucion-item-original"
-            className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
-          >
-            Item entregado
-          </label>
-          <select
-            id="sustitucion-item-original"
-            value={itemOriginalId ?? ""}
-            onChange={(e) => {
-              setItemOriginalId(e.target.value ? Number(e.target.value) : null);
-              setCantidad("");
-            }}
-            required
-            className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-          >
-            {lineasEntregadas.length === 0 && <option value="">Sin items entregados</option>}
-            {lineasEntregadas.map((it) => (
-              <option key={it.pedidoItemId} value={it.itemId}>
-                #{it.itemId} — {formatNumber(it.cantidadEntregada)} entregada
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <Combobox
-          label="Item correcto (sustituto)"
-          placeholder="Buscar item..."
-          required
-          value={itemSustitutoId}
-          onChange={setItemSustitutoId}
-          search={async (q) => {
-            const data = await apiGet<PageResponse<Item>>(
-              `/api/items?q=${encodeURIComponent(q)}&size=20&activos=true`
-            );
-            return data.content.map((i) => ({
-              id: i.id,
-              label: `${i.sku} — ${i.nombre}`,
-              sublabel: i.categoriaNombre ?? "",
-            }));
-          }}
-        />
-
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="sustitucion-cantidad"
-            className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
-          >
-            Cantidad (máx. {formatNumber(cantidadMax)})
-          </label>
-          <input
-            id="sustitucion-cantidad"
-            type="number"
-            min="0.001"
-            max={cantidadMax || undefined}
-            step="0.001"
-            value={cantidad}
-            onChange={(e) => setCantidad(e.target.value)}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="sustitucion-observaciones"
-            className="text-sm font-medium text-neutral-700 dark:text-neutral-300"
-          >
-            Observaciones
-          </label>
-          <textarea
-            id="sustitucion-observaciones"
-            value={observaciones}
-            onChange={(e) => setObservaciones(e.target.value)}
-            rows={3}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-          />
-        </div>
-
-        {error && <ErrorBox message={error} />}
-
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={submitting || lineasEntregadas.length === 0}>
-            {submitting ? "Guardando..." : "Registrar sustitución"}
           </Button>
         </div>
       </form>

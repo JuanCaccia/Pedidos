@@ -14,8 +14,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -176,6 +178,11 @@ class CobranzaServiceTest {
 		}
 
 		@Override
+		public List<Pedido> listarPorIds(Collection<Long> ids) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
 		public Map<EstadoPedido, Long> contadores() {
 			throw new UnsupportedOperationException();
 		}
@@ -183,6 +190,12 @@ class CobranzaServiceTest {
 		@Override
 		public com.sistema.common.model.PageResponse<Pedido> listarPaginado(EstadoPedido estado, Long clienteId,
 				Long vendedorId, int page, int size) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public com.sistema.common.model.PageResponse<Pedido> listarPaginadoPorEstadoYFecha(EstadoPedido estado,
+				LocalDate fechaJornada, int page, int size) {
 			throw new UnsupportedOperationException();
 		}
 	}

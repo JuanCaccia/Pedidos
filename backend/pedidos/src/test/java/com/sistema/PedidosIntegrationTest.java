@@ -740,6 +740,19 @@ class PedidosIntegrationTest {
 				.andExpect(status().isCreated());
 	}
 
+	@Test
+	void cobranzaSinClienteIdDevuelve400() throws Exception {
+		Sesion rep = loginRepartidor();
+
+		mockMvc.perform(post("/cobranzas")
+						.header("Authorization", "Bearer " + rep.token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+				.andExpect(jsonPath("$.fieldErrors.clienteId").exists());
+	}
+
 	private Sesion loginRepartidor() throws Exception {
 		String login = mockMvc.perform(post("/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)

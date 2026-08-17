@@ -16,9 +16,17 @@ export function formatNumber(value: number | string | null | undefined): string 
   return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(n);
 }
 
+function parseDateLocal(value: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+  return new Date(value);
+}
+
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) return "-";
-  const d = new Date(value);
+  const d = parseDateLocal(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleString("es-AR", {
     day: "2-digit",
@@ -31,7 +39,7 @@ export function formatDateTime(value: string | null | undefined): string {
 
 export function formatDate(value: string | null | undefined): string {
   if (!value) return "-";
-  const d = new Date(value);
+  const d = parseDateLocal(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString("es-AR", {
     day: "2-digit",

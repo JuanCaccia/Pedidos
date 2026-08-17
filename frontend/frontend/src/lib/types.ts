@@ -72,6 +72,14 @@ export interface Proveedor {
   activo: boolean;
 }
 
+export interface ProveedorItem {
+  proveedorId: number;
+  itemId: number;
+  itemSku: string | null;
+  itemNombre: string | null;
+  activo: boolean;
+}
+
 export interface Item {
   id: number;
   sku: string;

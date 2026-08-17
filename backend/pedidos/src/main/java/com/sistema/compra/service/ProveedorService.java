@@ -4,9 +4,11 @@ import com.sistema.common.exception.BusinessException;
 import com.sistema.common.exception.NotFoundException;
 import com.sistema.common.model.PageResponse;
 import com.sistema.compra.model.Proveedor;
+import com.sistema.compra.model.ProveedorItem;
 import com.sistema.compra.port.in.ConsultarProveedor;
 import com.sistema.compra.port.in.GestionarProveedor;
 import com.sistema.compra.port.out.ProveedorRepository;
+import com.sistema.compra.port.out.StockGateway;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,9 +20,11 @@ import java.util.Optional;
 public class ProveedorService implements GestionarProveedor, ConsultarProveedor {
 
 	private final ProveedorRepository proveedorRepository;
+	private final StockGateway stockGateway;
 
-	public ProveedorService(ProveedorRepository proveedorRepository) {
+	public ProveedorService(ProveedorRepository proveedorRepository, StockGateway stockGateway) {
 		this.proveedorRepository = proveedorRepository;
+		this.stockGateway = stockGateway;
 	}
 
 	@Override
@@ -82,5 +86,32 @@ public class ProveedorService implements GestionarProveedor, ConsultarProveedor 
 	@Override
 	public PageResponse<Proveedor> listarPaginado(String q, int page, int size) {
 		return proveedorRepository.buscar(q, page, size);
+	}
+
+	@Override
+	@Transactional
+	public List<ProveedorItem> setItemsDeProveedor(SetItemsCommand command) {
+		proveedorRepository.findById(command.proveedorId())
+				.orElseThrow(() -> new NotFoundException("Proveedor no encontrado: " + command.proveedorId()));
+		List<Long> itemIds = command.itemIds() == null ? List.of() : command.itemIds();
+		for (Long itemId : itemIds) {
+			if (!stockGateway.existeItem(itemId)) {
+				throw new NotFoundException("Item no encontrado: " + itemId);
+			}
+		}
+		proveedorRepository.reemplazarItems(command.proveedorId(), itemIds);
+		return proveedorRepository.listarItemsDeProveedor(command.proveedorId(), true);
+	}
+
+	@Override
+	public List<ProveedorItem> listarItemsDeProveedor(Long proveedorId, boolean soloActivos) {
+		proveedorRepository.findById(proveedorId)
+				.orElseThrow(() -> new NotFoundException("Proveedor no encontrado: " + proveedorId));
+		return proveedorRepository.listarItemsDeProveedor(proveedorId, soloActivos);
+	}
+
+	@Override
+	public List<Proveedor> listarProveedoresDeItem(Long itemId) {
+		return proveedorRepository.listarProveedoresDeItem(itemId);
 	}
 }

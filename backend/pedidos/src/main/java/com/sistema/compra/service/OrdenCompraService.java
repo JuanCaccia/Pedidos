@@ -55,11 +55,15 @@ public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenC
 			if (!stockGateway.existeItem(linea.itemId())) {
 				throw new NotFoundException("Item no encontrado: " + linea.itemId());
 			}
-			if (!stockGateway.itemActivo(linea.itemId())) {
-				throw new BusinessException("ITEM_INACTIVO",
-						"El item " + linea.itemId() + " está inactivo y no puede incluirse en una orden de compra");
-			}
-			orden.agregarLinea(new OrdenCompraLinea(linea.itemId(), linea.cantidad(), linea.precioUnitario()));
+				if (!stockGateway.itemActivo(linea.itemId())) {
+					throw new BusinessException("ITEM_INACTIVO",
+							"El item " + linea.itemId() + " está inactivo y no puede incluirse en una orden de compra");
+				}
+				if (!proveedorRepository.proveedorProveeItemActivo(command.proveedorId(), linea.itemId())) {
+					throw new BusinessException("ITEM_NO_PROVISTO_POR_PROVEEDOR",
+							"El item " + linea.itemId() + " no está en el catálogo activo del proveedor " + command.proveedorId());
+				}
+				orden.agregarLinea(new OrdenCompraLinea(linea.itemId(), linea.cantidad(), linea.precioUnitario()));
 		}
 		orden.setNumero("OC-" + String.format("%06d", System.nanoTime() % 1000000));
 		return ordenCompraRepository.save(orden);
@@ -88,6 +92,7 @@ public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenC
 			String codigoLote = orden.getNumero() + "-" + (System.nanoTime() % 100000);
 			stockGateway.registrarIngreso(linea.getItemId(), codigoLote, rl.cantidadRecibida(),
 					"Recepción de OC " + orden.getNumero(), orden.getProveedorId());
+			proveedorRepository.vincularItem(orden.getProveedorId(), linea.getItemId());
 		}
 		boolean completa = orden.getLineas().stream()
 				.allMatch(l -> l.getCantidadRecibida().compareTo(l.getCantidadPedida()) >= 0);

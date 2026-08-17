@@ -4,9 +4,12 @@ import com.sistema.common.exception.NotFoundException;
 import com.sistema.common.model.PageMapper;
 import com.sistema.common.model.PageResponse;
 import com.sistema.compra.adapter.in.web.dto.ActualizarProveedorRequest;
+import com.sistema.compra.adapter.in.web.dto.ProveedorItemResponse;
 import com.sistema.compra.adapter.in.web.dto.ProveedorRequest;
 import com.sistema.compra.adapter.in.web.dto.ProveedorResponse;
+import com.sistema.compra.adapter.in.web.dto.SetItemsProveedorRequest;
 import com.sistema.compra.model.Proveedor;
+import com.sistema.compra.model.ProveedorItem;
 import com.sistema.compra.port.in.ConsultarProveedor;
 import com.sistema.compra.port.in.GestionarProveedor;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/proveedores")
@@ -74,5 +79,20 @@ public class ProveedorController {
 		Proveedor proveedor = consultarProveedor.buscarPorId(id)
 				.orElseThrow(() -> new NotFoundException("Proveedor no encontrado: " + id));
 		return ResponseEntity.ok(ProveedorResponse.from(proveedor));
+	}
+
+	@PutMapping("/{id}/items")
+	public ResponseEntity<List<ProveedorItemResponse>> setearItems(@PathVariable Long id,
+			@Valid @RequestBody SetItemsProveedorRequest request) {
+		List<ProveedorItem> items = gestionarProveedor.setItemsDeProveedor(
+				new GestionarProveedor.SetItemsCommand(id, request.itemIds()));
+		return ResponseEntity.ok(items.stream().map(ProveedorItemResponse::from).toList());
+	}
+
+	@GetMapping("/{id}/items")
+	public ResponseEntity<List<ProveedorItemResponse>> listarItems(@PathVariable Long id,
+			@RequestParam(defaultValue = "true") boolean soloActivos) {
+		List<ProveedorItem> items = consultarProveedor.listarItemsDeProveedor(id, soloActivos);
+		return ResponseEntity.ok(items.stream().map(ProveedorItemResponse::from).toList());
 	}
 }

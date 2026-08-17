@@ -3,6 +3,8 @@ package com.sistema.config;
 import com.sistema.cliente.port.in.GestionarCliente;
 import com.sistema.cliente.port.in.GestionarZona;
 import com.sistema.common.model.Zona;
+import com.sistema.compra.port.in.ConsultarProveedor;
+import com.sistema.compra.port.in.GestionarProveedor;
 import com.sistema.stock.model.Item;
 import com.sistema.stock.port.in.GestionarItem;
 import com.sistema.stock.port.in.RegistrarIngreso;
@@ -14,7 +16,9 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 
 @Component
 public class DataSeeder implements CommandLineRunner {
@@ -26,14 +30,19 @@ public class DataSeeder implements CommandLineRunner {
 	private final GestionarCliente gestionarCliente;
 	private final GestionarItem gestionarItem;
 	private final RegistrarIngreso registrarIngreso;
+	private final GestionarProveedor gestionarProveedor;
+	private final ConsultarProveedor consultarProveedor;
 
 	public DataSeeder(GestionarUsuario gestionarUsuario, GestionarZona gestionarZona,
-			GestionarCliente gestionarCliente, GestionarItem gestionarItem, RegistrarIngreso registrarIngreso) {
+			GestionarCliente gestionarCliente, GestionarItem gestionarItem, RegistrarIngreso registrarIngreso,
+			GestionarProveedor gestionarProveedor, ConsultarProveedor consultarProveedor) {
 		this.gestionarUsuario = gestionarUsuario;
 		this.gestionarZona = gestionarZona;
 		this.gestionarCliente = gestionarCliente;
 		this.gestionarItem = gestionarItem;
 		this.registrarIngreso = registrarIngreso;
+		this.gestionarProveedor = gestionarProveedor;
+		this.consultarProveedor = consultarProveedor;
 	}
 
 	@Override
@@ -50,9 +59,32 @@ public class DataSeeder implements CommandLineRunner {
 		Long zonaSur = obtenerZonaId("Zona Sur");
 		seedCliente("Cliente Demo S.A.", "20123456789", "demo@pedidos.com", zonaCentro);
 		seedCliente("Otro Cliente S.R.L.", "20987654321", "otro@pedidos.com", zonaSur);
-		seedItemConIngreso("HAR-000", "Harina 000", "KG", "LOTE-DEMO-001");
-		seedItemConIngreso("ACE-1L", "Aceite 1L", "UN", "LOTE-DEMO-002");
-		seedItem("AZU-1K", "Azúcar 1kg", "UN");
+
+		// Proveedor demo con su catálogo de provisión, para que la validación de
+		// OC (item debe pertenecer al proveedor) sea usable desde el inicio.
+		Long proveedorDemoId = seedProveedor("Distribuidora Demo S.A.", "30111111111",
+				"demo@distribuidora.com", "555-0101");
+		List<Long> itemIds = new ArrayList<>();
+		Long harina = seedItemConIngreso("HAR-000", "Harina 000", "KG", "LOTE-DEMO-001");
+		Long aceite = seedItemConIngreso("ACE-1L", "Aceite 1L", "UN", "LOTE-DEMO-002");
+		Long azucar = seedItem("AZU-1K", "Azúcar 1kg", "UN");
+		if (harina != null) {
+			itemIds.add(harina);
+		}
+		if (aceite != null) {
+			itemIds.add(aceite);
+		}
+		if (azucar != null) {
+			itemIds.add(azucar);
+		}
+		if (proveedorDemoId != null && !itemIds.isEmpty()) {
+			try {
+				gestionarProveedor.setItemsDeProveedor(new GestionarProveedor.SetItemsCommand(proveedorDemoId, itemIds));
+				log.info("Seed catálogo proveedor demo: {} items", itemIds.size());
+			} catch (RuntimeException e) {
+				log.debug("Seed catálogo no creado: {}", e.getMessage());
+			}
+		}
 	}
 
 	private void seedUsuario(String nombre, String email, String password, EnumSet<Rol> roles) {
@@ -87,23 +119,40 @@ public class DataSeeder implements CommandLineRunner {
 		}
 	}
 
-	private void seedItemConIngreso(String sku, String nombre, String unidad, String codigoLote) {
+	private Long seedProveedor(String razonSocial, String cuit, String email, String telefono) {
+		try {
+			return gestionarProveedor.crearProveedor(new GestionarProveedor.CrearProveedorCommand(
+					razonSocial, cuit, email, telefono)).getId();
+		} catch (RuntimeException e) {
+			return consultarProveedor.listarTodos().stream()
+					.filter(p -> p.getCuit().equals(cuit))
+					.findFirst()
+					.map(com.sistema.compra.model.Proveedor::getId)
+					.orElse(null);
+		}
+	}
+
+	private Long seedItemConIngreso(String sku, String nombre, String unidad, String codigoLote) {
 		try {
 			Item item = gestionarItem.crearItem(new GestionarItem.CrearItemCommand(sku, nombre, unidad, null, null, null));
 			registrarIngreso.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(item.getId(), codigoLote, null,
 					new BigDecimal("100.000"), "Seed demo", null));
 			log.info("Seed item + ingreso creado: {}", sku);
+			return item.getId();
 		} catch (RuntimeException e) {
 			log.debug("Seed item ya existente o no creado: {} ({})", sku, e.getMessage());
+			return null;
 		}
 	}
 
-	private void seedItem(String sku, String nombre, String unidad) {
+	private Long seedItem(String sku, String nombre, String unidad) {
 		try {
-			gestionarItem.crearItem(new GestionarItem.CrearItemCommand(sku, nombre, unidad, null, null, null));
+			Item item = gestionarItem.crearItem(new GestionarItem.CrearItemCommand(sku, nombre, unidad, null, null, null));
 			log.info("Seed item creado: {}", sku);
+			return item.getId();
 		} catch (RuntimeException e) {
 			log.debug("Seed item ya existente o no creado: {} ({})", sku, e.getMessage());
+			return null;
 		}
 	}
 }

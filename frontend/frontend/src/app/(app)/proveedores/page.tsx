@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch, apiGet, apiPost } from "@/lib/api";
-import type { Proveedor, PageResponse } from "@/lib/types";
+import type { Item, PageResponse, Proveedor, ProveedorItem } from "@/lib/types";
 import Loading from "@/components/Loading";
 import ErrorBox from "@/components/ErrorBox";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import Pagination from "@/components/Pagination";
+import Combobox from "@/components/Combobox";
+import { IconClose } from "@/components/icons";
 
 const PAGE_SIZE = 20;
 
@@ -34,6 +36,7 @@ export default function ProveedoresPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  const [itemsProveedor, setItemsProveedor] = useState<Proveedor | null>(null);
 
   const loadProveedores = useCallback(async () => {
     setLoading(true);
@@ -185,6 +188,16 @@ export default function ProveedoresPage() {
                           onClick={() => {
                             setSuccess(null);
                             setError(null);
+                            setItemsProveedor(proveedor);
+                          }}
+                        >
+                          Items
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setSuccess(null);
+                            setError(null);
                             setEditId(proveedor.id);
                           }}
                         >
@@ -234,6 +247,10 @@ export default function ProveedoresPage() {
           onClose={() => setEditId(null)}
           onSubmit={actualizarProveedor}
         />
+      )}
+
+      {itemsProveedor && (
+        <ProveedorItemsModal proveedor={itemsProveedor} onClose={() => setItemsProveedor(null)} />
       )}
     </div>
   );
@@ -365,6 +382,153 @@ function ProveedorFormModal({
           </Button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+function ProveedorItemsModal({
+  proveedor,
+  onClose,
+}: {
+  proveedor: Proveedor;
+  onClose: () => void;
+}) {
+  const [items, setItems] = useState<ProveedorItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [pickerKey, setPickerKey] = useState(0);
+
+  const loadItems = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiGet<ProveedorItem[]>(`/api/proveedores/${proveedor.id}/items`);
+      setItems(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setLoading(false);
+    }
+  }, [proveedor.id]);
+
+  useEffect(() => {
+    loadItems();
+  }, [loadItems]);
+
+  const seleccionados = useMemo(() => new Set(items.map((i) => i.itemId)), [items]);
+
+  async function agregarItem(itemId: number) {
+    if (seleccionados.has(itemId)) return;
+    setItems((prev) => [
+      ...prev,
+      { proveedorId: proveedor.id, itemId, itemSku: null, itemNombre: null, activo: true },
+    ]);
+    setPickerKey((k) => k + 1);
+  }
+
+  function quitarItem(itemId: number) {
+    setItems((prev) => prev.filter((i) => i.itemId !== itemId));
+  }
+
+  async function handleSave() {
+    if (saving) return;
+    setError(null);
+    setSaving(true);
+    try {
+      const saved = await apiFetch<ProveedorItem[]>(`/api/proveedores/${proveedor.id}/items`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIds: items.map((i) => i.itemId) }),
+      });
+      setItems(saved);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={`Catálogo de ${proveedor.razonSocial}`} onClose={onClose} width="lg">
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          Definí qué items provee este proveedor. Al crear una orden de compra solo se
+          admiten items del catálogo activo.
+        </p>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Agregar item</span>
+          <Combobox
+            key={pickerKey}
+            placeholder="Buscar item para vincular..."
+            value={null}
+            onChange={(id) => {
+              if (id != null) agregarItem(id);
+            }}
+            search={async (q) => {
+              const params = new URLSearchParams({ q, size: "20", activos: "true" });
+              const data = await apiGet<PageResponse<Item>>(`/api/items?${params.toString()}`);
+              return data.content.map((i) => ({
+                id: i.id,
+                label: `${i.sku} — ${i.nombre}`,
+                sublabel: i.categoriaNombre ?? "",
+              }));
+            }}
+          />
+        </div>
+
+        {loading ? (
+          <Loading />
+        ) : (
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              Items en el catálogo ({items.length})
+            </span>
+            {items.length === 0 && (
+              <p className="text-sm text-neutral-500">No hay items vinculados a este proveedor.</p>
+            )}
+            <div className="flex flex-col gap-2">
+              {items.map((item) => (
+                <div
+                  key={item.itemId}
+                  className="flex items-center justify-between gap-3 rounded-md border border-neutral-200 px-3 py-2 dark:border-neutral-700"
+                >
+                  <div className="min-w-0">
+                    <span className="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      {item.itemNombre ?? `#${item.itemId}`}
+                    </span>
+                    {item.itemSku && (
+                      <span className="ml-2 font-mono text-xs text-neutral-500 dark:text-neutral-400">
+                        {item.itemSku}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => quitarItem(item.itemId)}
+                    aria-label={`Quitar item ${item.itemId}`}
+                    className="rounded-md border border-neutral-200 p-1.5 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-red-600 dark:border-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-red-400"
+                  >
+                    <IconClose />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {error && <ErrorBox message={error} />}
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="button" onClick={handleSave} disabled={saving || loading}>
+            {saving ? "Guardando..." : "Guardar catálogo"}
+          </Button>
+        </div>
+      </div>
     </Modal>
   );
 }

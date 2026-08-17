@@ -7,6 +7,7 @@ import com.sistema.compra.model.EstadoOrdenCompra;
 import com.sistema.compra.model.OrdenCompra;
 import com.sistema.compra.model.OrdenCompraLinea;
 import com.sistema.compra.model.Proveedor;
+import com.sistema.compra.model.ProveedorItem;
 import com.sistema.compra.port.in.GestionarOrdenCompra;
 import com.sistema.compra.port.out.OrdenCompraRepository;
 import com.sistema.compra.port.out.ProveedorRepository;
@@ -17,12 +18,15 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,7 +42,9 @@ class OrdenCompraServiceTest {
 	void setUp() {
 		ordenCompraRepository = new FakeOrdenCompraRepository();
 		proveedorRepository = new FakeProveedorRepository();
-		proveedorRepository.save(new Proveedor("Distribuidora S.A.", "20111111111"));
+		Proveedor proveedor = proveedorRepository.save(new Proveedor("Distribuidora S.A.", "20111111111"));
+		proveedorRepository.vincularItem(proveedor.getId(), 100L);
+		proveedorRepository.vincularItem(proveedor.getId(), 200L);
 		stockGateway = new FakeStockGateway();
 		ordenCompraService = new OrdenCompraService(ordenCompraRepository, proveedorRepository, stockGateway);
 	}
@@ -97,6 +103,14 @@ class OrdenCompraServiceTest {
 	}
 
 	@Test
+	void crearOrdenCompraConItemNoProvistoPorProveedorLanzaBusinessException() {
+		BusinessException ex = assertThrows(BusinessException.class, () -> ordenCompraService.crearOrdenCompra(
+				new GestionarOrdenCompra.CrearOrdenCompraCommand(1L, null, List.of(
+						new GestionarOrdenCompra.LineaOrdenCommand(999L, new BigDecimal("10"), new BigDecimal("50"))))));
+		assertEquals("ITEM_NO_PROVISTO_POR_PROVEEDOR", ex.getCode());
+	}
+
+	@Test
 	void crearOrdenCompraConProveedorInactivoLanzaBusinessException() {
 		Proveedor proveedor = proveedorRepository.findById(1L).orElseThrow();
 		proveedor.desactivar();
@@ -150,6 +164,7 @@ class OrdenCompraServiceTest {
 	void recepcionAsociaProveedorDeLaOcAlIngresoDeLote() {
 		Proveedor segundoProveedor = new Proveedor("Otra Distribuidora S.A.", "20222222222");
 		segundoProveedor = proveedorRepository.save(segundoProveedor);
+		proveedorRepository.vincularItem(segundoProveedor.getId(), 100L);
 		OrdenCompra orden = ordenCompraService.crearOrdenCompra(new GestionarOrdenCompra.CrearOrdenCompraCommand(
 				segundoProveedor.getId(), "obs",
 				List.of(new GestionarOrdenCompra.LineaOrdenCommand(100L, new BigDecimal("10"), new BigDecimal("50")))));
@@ -160,6 +175,19 @@ class OrdenCompraServiceTest {
 
 		assertEquals(1, stockGateway.ingresos.size());
 		assertTrue(stockGateway.ingresos.contains("100:10:" + segundoProveedor.getId()));
+	}
+
+	@Test
+	void recepcionAutoVinculaItemsRecibidosAlProveedor() {
+		OrdenCompra orden = ordenCompraService.crearOrdenCompra(comandoConUnaLinea());
+		Long linea = orden.getLineas().get(0).getId();
+		proveedorRepository.reemplazarItems(1L, List.of());
+		assertFalse(proveedorRepository.proveedorProveeItemActivo(1L, 100L));
+
+		ordenCompraService.registrarRecepcion(new GestionarOrdenCompra.RecepcionCommand(orden.getId(), List.of(
+				new GestionarOrdenCompra.RecepcionLineaCommand(linea, new BigDecimal("10")))));
+
+		assertTrue(proveedorRepository.proveedorProveeItemActivo(1L, 100L));
 	}
 
 	@Test
@@ -231,7 +259,13 @@ class OrdenCompraServiceTest {
 	private static class FakeProveedorRepository implements ProveedorRepository {
 
 		private final Map<Long, Proveedor> datos = new HashMap<>();
-		private final AtomicLong secuencia = new AtomicLong(1);
+		private final Map<Long, Set<Long>> itemsPorProveedor = new HashMap<>();
+		private final 		AtomicLong secuencia = new AtomicLong(1);
+
+		@Override
+		public void vincularItem(Long proveedorId, Long itemId) {
+			itemsPorProveedor.computeIfAbsent(proveedorId, k -> new LinkedHashSet<>()).add(itemId);
+		}
 
 		@Override
 		public Proveedor save(Proveedor proveedor) {
@@ -269,6 +303,35 @@ class OrdenCompraServiceTest {
 			int to = Math.min(from + size, total);
 			int totalPages = size == 0 ? 0 : (total + size - 1) / size;
 			return new PageResponse<>(todos.subList(from, to), page, size, total, totalPages);
+		}
+
+		@Override
+		public void reemplazarItems(Long proveedorId, List<Long> itemIds) {
+			itemsPorProveedor.put(proveedorId, new LinkedHashSet<>(itemIds));
+		}
+
+		@Override
+		public List<ProveedorItem> listarItemsDeProveedor(Long proveedorId, boolean soloActivos) {
+			return itemsPorProveedor.getOrDefault(proveedorId, Set.of()).stream()
+					.map(itemId -> {
+						ProveedorItem pi = new ProveedorItem(proveedorId, itemId);
+						pi.setItemSku("SKU-" + itemId);
+						pi.setItemNombre("Item " + itemId);
+						return pi;
+					})
+					.toList();
+		}
+
+		@Override
+		public boolean proveedorProveeItemActivo(Long proveedorId, Long itemId) {
+			return itemsPorProveedor.getOrDefault(proveedorId, Set.of()).contains(itemId);
+		}
+
+		@Override
+		public List<Proveedor> listarProveedoresDeItem(Long itemId) {
+			return datos.values().stream()
+					.filter(p -> itemsPorProveedor.getOrDefault(p.getId(), Set.of()).contains(itemId))
+					.toList();
 		}
 	}
 

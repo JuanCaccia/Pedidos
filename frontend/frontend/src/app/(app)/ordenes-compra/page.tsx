@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost, apiUploadCsv } from "@/lib/api";
-import type { Categoria, EstadoOrdenCompra, ImportacionCsvResponse, Item, OrdenCompra, PageResponse, Proveedor } from "@/lib/types";
+import type { Categoria, EstadoOrdenCompra, ImportacionCsvResponse, Item, OrdenCompra, PageResponse, Proveedor, StockInfo } from "@/lib/types";
 import { formatDate, formatNumber } from "@/lib/format";
 import Loading from "@/components/Loading";
 import ErrorBox from "@/components/ErrorBox";
@@ -40,6 +40,7 @@ const INPUT_CLASS =
 interface FormLineaRow {
   key: number;
   itemId: number | null;
+  itemLabel: string | null;
   cantidad: string;
 }
 
@@ -553,8 +554,10 @@ function NuevaOrdenForm({
   const [observaciones, setObservaciones] = useState("");
   const [categoriaId, setCategoriaId] = useState("");
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
+  const [disponiblesById, setDisponiblesById] = useState<Map<number, number>>(new Map());
   const [lineas, setLineas] = useState<FormLineaRow[]>([
-    { key: Date.now(), itemId: null, cantidad: "" },
+    { key: Date.now(), itemId: null, itemLabel: null, cantidad: "" },
   ]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -567,8 +570,19 @@ function NuevaOrdenForm({
       });
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams({ size: "500" });
+    if (categoriaId) params.set("categoriaId", categoriaId);
+    params.set("activos", "true");
+    apiGet<PageResponse<Item>>(`/api/items?${params.toString()}`)
+      .then((data) => setItems(data.content))
+      .catch(() => {
+        setItems([]);
+      });
+  }, [categoriaId]);
+
   function addLinea() {
-    setLineas((prev) => [...prev, { key: Date.now() + Math.random(), itemId: null, cantidad: "" }]);
+    setLineas((prev) => [...prev, { key: Date.now() + Math.random(), itemId: null, itemLabel: null, cantidad: "" }]);
   }
 
   function updateLinea<K extends keyof FormLineaRow>(key: number, field: K, value: FormLineaRow[K]) {
@@ -577,6 +591,30 @@ function NuevaOrdenForm({
 
   function removeLinea(key: number) {
     setLineas((prev) => prev.filter((l) => l.key !== key));
+  }
+
+  /**
+   * Disponibilidad por ítem vía GET /api/stock/items/{id} (endpoint `authenticated`),
+   * en paralelo y cacheada en `disponiblesById`. Se usa el mismo mecanismo que el
+   * form de pedidos para no depender de /api/reportes/stock: aunque OC solo lo
+   * abren ENCARGADO_DEPOSITO/ADMINISTRATIVO (SecurityConfig los habilita en
+   * /ordenes-compra/**), este endpoint es `authenticated` y evita una dependencia
+   * frágil si algún rol con 403 llegara a abrir el form.
+   */
+  async function obtenerDisponibles(ids: number[]): Promise<Map<number, number>> {
+    const map = new Map(disponiblesById);
+    const missing = ids.filter((id) => !map.has(id));
+    if (missing.length > 0) {
+      const results = await Promise.allSettled(
+        missing.map((id) => apiGet<StockInfo>(`/api/stock/items/${id}`))
+      );
+      results.forEach((r, idx) => {
+        const id = missing[idx];
+        if (r.status === "fulfilled") map.set(id, r.value.disponible);
+      });
+      setDisponiblesById(new Map(map));
+    }
+    return map;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -669,7 +707,6 @@ function NuevaOrdenForm({
               value={categoriaId}
               onChange={(e) => {
                 setCategoriaId(e.target.value);
-                setLineas((prev) => prev.map((l) => ({ ...l, itemId: null })));
               }}
               className={INPUT_CLASS}
             >
@@ -685,20 +722,38 @@ function NuevaOrdenForm({
             {lineas.map((linea) => (
               <div key={linea.key} className="grid grid-cols-[1fr_5rem_auto] gap-2">
                 <Combobox
-                  key={`${linea.key}-${categoriaId}`}
+                  key={linea.key}
                   placeholder="Buscar item..."
                   value={linea.itemId}
-                  onChange={(id) => updateLinea(linea.key, "itemId", id)}
+                  valueLabel={linea.itemLabel}
+                  onChange={(id) => {
+                    updateLinea(linea.key, "itemId", id);
+                    if (id != null) {
+                      const item = items.find((i) => i.id === id);
+                      updateLinea(linea.key, "itemLabel", item ? `${item.sku} — ${item.nombre}` : null);
+                    } else {
+                      updateLinea(linea.key, "itemLabel", null);
+                    }
+                  }}
                   search={async (q) => {
                     const params = new URLSearchParams({ q, size: "20" });
                     if (categoriaId) params.set("categoriaId", categoriaId);
                     params.set("activos", "true");
                     const data = await apiGet<PageResponse<Item>>(`/api/items?${params.toString()}`);
-                    return data.content.map((i) => ({
-                      id: i.id,
-                      label: `${i.sku} — ${i.nombre}`,
-                      sublabel: i.categoriaNombre ?? "",
-                    }));
+                    const disponibles = await obtenerDisponibles(data.content.map((i) => i.id));
+                    return data.content.map((i) => {
+                      const disponible = disponibles.get(i.id);
+                      return {
+                        id: i.id,
+                        label: `${i.sku} — ${i.nombre}`,
+                        sublabel: [
+                          i.categoriaNombre ?? "",
+                          disponible != null ? `Disponible: ${formatNumber(disponible)} un.` : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · "),
+                      };
+                    });
                   }}
                 />
                 <input

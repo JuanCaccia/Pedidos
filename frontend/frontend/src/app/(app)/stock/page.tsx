@@ -196,7 +196,7 @@ function StockPageInner() {
     showToast(message);
     setModal(null);
     setSelected(null);
-    await loadStock();
+    await Promise.all([loadLotes(), loadStock()]);
   }
 
   async function exportar() {

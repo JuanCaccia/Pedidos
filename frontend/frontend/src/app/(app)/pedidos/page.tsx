@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api";
-import type { ApiError, Categoria, Cliente, Item, Pedido, PedidoItem, EstadoPedido, PageResponse } from "@/lib/types";
+import type { ApiError, Categoria, Cliente, EntregaRequest, Item, Pedido, PedidoItem, EstadoPedido, PageResponse, StockInfo } from "@/lib/types";
 import { formatDateTime, formatMoney, formatNumber } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import EstadoBadge from "@/components/EstadoBadge";
@@ -97,6 +97,8 @@ function PedidosPageInner() {
   const [rechazarPedido, setRechazarPedido] = useState<Pedido | null>(null);
 
   const [sustituirPedido, setSustituirPedido] = useState<Pedido | null>(null);
+
+  const [entregaPedido, setEntregaPedido] = useState<Pedido | null>(null);
 
   const [marcarFaltante, setMarcarFaltante] = useState<{ pedido: Pedido; item: PedidoItem } | null>(null);
 
@@ -513,6 +515,7 @@ function PedidosPageInner() {
             onSustituir={() => {
               setSustituirPedido(detallePedido);
             }}
+            onRegistrarEntrega={() => setEntregaPedido(detallePedido)}
             onMarcarFaltante={(item) => setMarcarFaltante({ pedido: detallePedido, item })}
             onVerHijos={() => verHijos(detallePedido)}
             verHijosActivo={verHijosActivo}
@@ -541,6 +544,22 @@ function PedidosPageInner() {
           onConfirm={async () => {
             setSustituirPedido(null);
             showToast(`Sustitución registrada en el pedido ${sustituirPedido.numero}.`);
+            await loadPedidos();
+          }}
+        />
+      )}
+
+      {entregaPedido && (
+        <EntregaModal
+          pedido={entregaPedido}
+          onClose={() => setEntregaPedido(null)}
+          onRegistered={async (resultado) => {
+            setEntregaPedido(null);
+            if (resultado.estado === "ENTREGADO_PARCIAL") {
+              showToast(`Entrega parcial registrada en ${resultado.numero}.`);
+            } else {
+              showToast(`Entrega registrada en ${resultado.numero}.`);
+            }
             await loadPedidos();
           }}
         />
@@ -652,6 +671,7 @@ function PedidoDetalle({
   onRechazar,
   onSustituir,
   onMarcarFaltante,
+  onRegistrarEntrega,
   onVerHijos,
   verHijosActivo,
   hijos,
@@ -666,6 +686,7 @@ function PedidoDetalle({
   onReagendar: () => void;
   onRechazar: () => void;
   onSustituir: () => void;
+  onRegistrarEntrega: () => void;
   onMarcarFaltante: (item: PedidoItem) => void;
   onVerHijos: () => void;
   verHijosActivo: boolean;
@@ -793,6 +814,9 @@ function PedidoDetalle({
               Sustituir item
             </Button>
           )}
+        {pedido.estado === "EN_VIAJE" && hasAnyRole("REPARTIDOR", "ADMINISTRATIVO") && (
+          <Button onClick={onRegistrarEntrega}>Registrar entrega</Button>
+        )}
       </div>
 
       {hijosLoading && <p className="text-sm text-neutral-500">Cargando hijos...</p>}
@@ -817,6 +841,106 @@ function PedidoDetalle({
         </div>
       )}
     </div>
+  );
+}
+
+function EntregaModal({
+  pedido,
+  onClose,
+  onRegistered,
+}: {
+  pedido: Pedido;
+  onClose: () => void;
+  onRegistered: (resultado: Pedido) => Promise<void> | void;
+}) {
+  const [cantidades, setCantidades] = useState<Record<number, string>>(() =>
+    Object.fromEntries(pedido.items.map((it) => [it.pedidoItemId, String(it.cantidadReservada)]))
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  function setCantidad(pedidoItemId: number, value: string) {
+    setCantidades((prev) => ({ ...prev, [pedidoItemId]: value }));
+  }
+
+  async function handleSubmit() {
+    if (submitting) return;
+    setError(null);
+    const entregas = pedido.items
+      .map((it) => ({
+        pedidoItemId: it.pedidoItemId,
+        cantidadEntregada: Number(cantidades[it.pedidoItemId] ?? "0"),
+      }))
+      .filter((e) => e.cantidadEntregada > 0);
+
+    if (entregas.length === 0) {
+      setError("Ingresá al menos una unidad a entregar.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const resultado = await apiPost<Pedido>(`/api/pedidos/${pedido.id}/entregas`, {
+        entregas,
+      } satisfies EntregaRequest);
+      await onRegistered(resultado);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title={`Registrar entrega · ${pedido.numero}`} onClose={onClose} width="lg">
+      <div className="flex flex-col gap-4">
+        <div className="overflow-x-auto rounded-md border border-neutral-200 dark:border-neutral-800">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-neutral-200 bg-white text-xs uppercase text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900">
+                <th className="px-3 py-2 font-medium text-left">Item</th>
+                <th className="px-3 py-2 font-medium text-right">Reservada</th>
+                <th className="px-3 py-2 font-medium text-right">Entregada</th>
+                <th className="px-3 py-2 font-medium text-right">A entregar</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+              {pedido.items.map((it) => (
+                <tr key={it.pedidoItemId}>
+                  <td className="px-3 py-2 text-neutral-700 dark:text-neutral-300">#{it.itemId}</td>
+                  <td className="px-3 py-2 text-right text-neutral-700 dark:text-neutral-300">
+                    {formatNumber(it.cantidadReservada)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-neutral-700 dark:text-neutral-300">
+                    {formatNumber(it.cantidadEntregada)}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number"
+                      min="0"
+                      max={it.cantidadReservada}
+                      step="0.001"
+                      value={cantidades[it.pedidoItemId] ?? "0"}
+                      onChange={(e) => setCantidad(it.pedidoItemId, e.target.value)}
+                      className="w-24 rounded-md border border-neutral-300 bg-white px-2 py-1 text-right text-sm text-neutral-900 outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {error && <ErrorBox message={error} />}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "Registrando..." : "Registrar entrega"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -950,6 +1074,7 @@ function NuevoPedidoForm({
   const [categoriaId, setCategoriaId] = useState("");
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [disponiblesById, setDisponiblesById] = useState<Map<number, number>>(new Map());
   const [lineas, setLineas] = useState<FormItemRow[]>([{ key: Date.now(), itemId: null, itemLabel: null, cantidad: "", precioUnitario: "" }]);
 
   useEffect(() => {
@@ -981,6 +1106,30 @@ function NuevoPedidoForm({
 
   function removeLinea(key: number) {
     setLineas((prev) => prev.filter((l) => l.key !== key));
+  }
+
+  /**
+   * Trae la disponibilidad de los items dados vía GET /api/stock/items/{id}
+   * (endpoint `authenticated`, 200 para VENDEDOR, a diferencia de /reportes/stock
+   * que es 403). Dispara las consultas en paralelo y cachea el resultado en
+   * `disponiblesById` para no re-consultar items ya resueltos en búsquedas
+   * posteriores. Devuelve el mapa combinado (cache + recién consultados) para
+   * que la búsqueda actual pueda mostrarlo sin esperar un re-render.
+   */
+  async function obtenerDisponibles(ids: number[]): Promise<Map<number, number>> {
+    const map = new Map(disponiblesById);
+    const missing = ids.filter((id) => !map.has(id));
+    if (missing.length > 0) {
+      const results = await Promise.allSettled(
+        missing.map((id) => apiGet<StockInfo>(`/api/stock/items/${id}`))
+      );
+      results.forEach((r, idx) => {
+        const id = missing[idx];
+        if (r.status === "fulfilled") map.set(id, r.value.disponible);
+      });
+      setDisponiblesById(new Map(map));
+    }
+    return map;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -1139,11 +1288,20 @@ function NuevoPedidoForm({
                     if (categoriaId) params.set("categoriaId", categoriaId);
                     params.set("activos", "true");
                     const data = await apiGet<PageResponse<Item>>(`/api/items?${params.toString()}`);
-                    return data.content.map((i) => ({
-                      id: i.id,
-                      label: `${i.sku} — ${i.nombre}`,
-                      sublabel: i.categoriaNombre ?? "",
-                    }));
+                    const disponibles = await obtenerDisponibles(data.content.map((i) => i.id));
+                    return data.content.map((i) => {
+                      const disponible = disponibles.get(i.id);
+                      return {
+                        id: i.id,
+                        label: `${i.sku} — ${i.nombre}`,
+                        sublabel: [
+                          i.categoriaNombre ?? "",
+                          disponible != null ? `Disponible: ${formatNumber(disponible)} un.` : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · "),
+                      };
+                    });
                   }}
                 />
                 <input

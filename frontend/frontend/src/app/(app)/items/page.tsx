@@ -36,7 +36,7 @@ export default function ItemsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [editId, setEditId] = useState<number | null>(null);
-  const [showCategorias, setShowCategorias] = useState(false);
+  const [tab, setTab] = useState<"items" | "categorias">("items");
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -126,26 +126,31 @@ export default function ItemsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Items</h1>
         {canGestionar && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => setShowCategorias(true)}
-            >
-              Gestionar categorías
-            </Button>
-            <Button
-              onClick={() => {
-                setFormError(null);
-                setShowForm(true);
-              }}
-            >
-              Nuevo item
-            </Button>
-          </div>
+          <Button
+            onClick={() => {
+              setFormError(null);
+              setShowForm(true);
+            }}
+          >
+            Nuevo item
+          </Button>
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-800">
+        <TabButton active={tab === "items"} onClick={() => setTab("items")}>
+          Items
+        </TabButton>
+        {canGestionar && (
+          <TabButton active={tab === "categorias"} onClick={() => setTab("categorias")}>
+            Categorías
+          </TabButton>
+        )}
+      </div>
+
+      {tab === "items" ? (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
         <input
           type="search"
           value={searchInput}
@@ -275,10 +280,9 @@ export default function ItemsPage() {
           onClose={() => setEditId(null)}
         />
       )}
-
-      {showCategorias && (
-        <GestionarCategoriasModal
-          onClose={() => setShowCategorias(false)}
+        </>
+      ) : (
+        <GestionarCategorias
           onCambio={async () => {
             await loadItems();
             await loadCategorias();
@@ -286,6 +290,26 @@ export default function ItemsPage() {
         />
       )}
     </div>
+  );
+}
+
+function TabButton({ active, onClick, children }: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+        active
+          ? "border-blue-500 text-blue-700 dark:text-blue-300"
+          : "border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -609,11 +633,9 @@ function NuevoItemForm({
   );
 }
 
-function GestionarCategoriasModal({
-  onClose,
+function GestionarCategorias({
   onCambio,
 }: {
-  onClose: () => void;
   onCambio: () => Promise<void>;
 }) {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -703,9 +725,8 @@ function GestionarCategoriasModal({
   }
 
   return (
-    <Modal title="Gestionar categorías" onClose={onClose} width="lg">
-      <div className="flex flex-col gap-4">
-        <form onSubmit={crear} className="flex items-center gap-2">
+    <div className="flex flex-col gap-4">
+      <form onSubmit={crear} className="flex items-center gap-2">
           <input
             value={nueva}
             onChange={(e) => setNueva(e.target.value)}
@@ -804,7 +825,6 @@ function GestionarCategoriasModal({
             </table>
           </div>
         )}
-      </div>
-    </Modal>
+    </div>
   );
 }

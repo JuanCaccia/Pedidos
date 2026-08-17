@@ -15,13 +15,50 @@ import NotificationsBell from "@/components/NotificationsBell";
 import { ToastProvider } from "@/components/Toast";
 import { IconMenu } from "@/components/icons";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Panel" },
-  { href: "/pedidos", label: "Pedidos" },
-  { href: "/stock", label: "Stock" },
-  { href: "/items", label: "Items" },
-  { href: "/clientes", label: "Clientes" },
-];
+interface NavItem {
+  href: string;
+  label: string;
+}
+
+interface NavSection {
+  title?: string;
+  items: NavItem[];
+}
+
+function itemsPorRol(roles: string[]): NavSection[] {
+  const esAdmin = roles.includes("ADMINISTRATIVO");
+  const esVendedor = roles.includes("VENDEDOR");
+  const esEncargado = roles.includes("ENCARGADO_DEPOSITO");
+
+  if (roles.includes("REPARTIDOR")) {
+    return [{ items: [{ href: "/turno", label: "Mi Jornada" }] }];
+  }
+
+  const operacion: NavItem[] = [
+    { href: "/", label: "Panel" },
+    { href: "/pedidos", label: "Pedidos" },
+  ];
+  if (esAdmin || esEncargado) operacion.push({ href: "/stock", label: "Stock" });
+  operacion.push({ href: "/items", label: esVendedor ? "Catálogo" : "Items" });
+  operacion.push({ href: "/clientes", label: "Clientes" });
+  if (esAdmin) operacion.push({ href: "/turno", label: "Mi Jornada" });
+
+  const gestion: NavItem[] = [];
+  if (esAdmin || esEncargado) gestion.push({ href: "/proveedores", label: "Proveedores" });
+  if (esAdmin || esEncargado) gestion.push({ href: "/ordenes-compra", label: "Compras" });
+  if (esAdmin) gestion.push({ href: "/zonas", label: "Zonas" });
+  if (esAdmin || esVendedor) gestion.push({ href: "/cobranzas", label: "Cobranzas" });
+  if (esAdmin) gestion.push({ href: "/rutas", label: "Rutas" });
+
+  if (!esAdmin) {
+    return [{ items: [...operacion, ...gestion] }];
+  }
+
+  const secciones: NavSection[] = [{ title: "Operación", items: operacion }];
+  if (gestion.length) secciones.push({ title: "Gestión", items: gestion });
+  secciones.push({ items: [{ href: "/usuarios", label: "Usuarios" }] });
+  return secciones;
+}
 
 const INPUT_CLASS =
   "rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100";
@@ -187,85 +224,26 @@ function SidebarNav({
 
   return (
     <nav className="flex flex-col gap-1 p-3">
-      {NAV_ITEMS.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          onClick={onNavigate}
-          aria-current={isActive(item.href) ? "page" : undefined}
-          className={linkClass(item.href)}
-        >
-          {item.label}
-        </Link>
+      {itemsPorRol(user.roles).map((seccion, idx) => (
+        <div key={idx} className={idx > 0 ? "mt-3 flex flex-col gap-1" : "flex flex-col gap-1"}>
+          {seccion.title && (
+            <div className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+              {seccion.title}
+            </div>
+          )}
+          {seccion.items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onNavigate}
+              aria-current={isActive(item.href) ? "page" : undefined}
+              className={linkClass(item.href)}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
       ))}
-      {(user.roles.includes("ENCARGADO_DEPOSITO") || user.roles.includes("ADMINISTRATIVO")) && (
-        <>
-          <Link
-            href="/proveedores"
-            onClick={onNavigate}
-            aria-current={isActive("/proveedores") ? "page" : undefined}
-            className={linkClass("/proveedores")}
-          >
-            Proveedores
-          </Link>
-          <Link
-            href="/ordenes-compra"
-            onClick={onNavigate}
-            aria-current={isActive("/ordenes-compra") ? "page" : undefined}
-            className={linkClass("/ordenes-compra")}
-          >
-            Compras
-          </Link>
-          <Link
-            href="/zonas"
-            onClick={onNavigate}
-            aria-current={isActive("/zonas") ? "page" : undefined}
-            className={linkClass("/zonas")}
-          >
-            Zonas
-          </Link>
-        </>
-      )}
-      {(user.roles.includes("VENDEDOR") || user.roles.includes("ADMINISTRATIVO")) && (
-        <Link
-          href="/cobranzas"
-          onClick={onNavigate}
-          aria-current={isActive("/cobranzas") ? "page" : undefined}
-          className={linkClass("/cobranzas")}
-        >
-          Cobranzas
-        </Link>
-      )}
-      {(user.roles.includes("REPARTIDOR") || user.roles.includes("ADMINISTRATIVO")) && (
-        <Link
-          href="/rutas"
-          onClick={onNavigate}
-          aria-current={isActive("/rutas") ? "page" : undefined}
-          className={linkClass("/rutas")}
-        >
-          Rutas
-        </Link>
-      )}
-      {(user.roles.includes("REPARTIDOR") || user.roles.includes("ADMINISTRATIVO")) && (
-        <Link
-          href="/turno"
-          onClick={onNavigate}
-          aria-current={isActive("/turno") ? "page" : undefined}
-          className={linkClass("/turno")}
-        >
-          Mis entregas
-        </Link>
-      )}
-      {user.roles.includes("ADMINISTRATIVO") && (
-        <Link
-          href="/usuarios"
-          onClick={onNavigate}
-          aria-current={isActive("/usuarios") ? "page" : undefined}
-          className={linkClass("/usuarios")}
-        >
-          Usuarios
-        </Link>
-      )}
     </nav>
   );
 }

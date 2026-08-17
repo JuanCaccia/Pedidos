@@ -14,8 +14,7 @@ const INPUT_CLASS =
 
 export default function ZonasPage() {
   const { user } = useAuth();
-  const canGestionar =
-    (user?.roles.includes("ENCARGADO_DEPOSITO") || user?.roles.includes("ADMINISTRATIVO")) ?? false;
+  const canGestionar = user?.roles.includes("ADMINISTRATIVO") ?? false;
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

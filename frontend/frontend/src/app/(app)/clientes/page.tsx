@@ -10,6 +10,7 @@ import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import Pagination from "@/components/Pagination";
 import { exportarCSV } from "@/lib/export";
+import ZonasPage from "../zonas/page";
 
 const PAGE_SIZE = 20;
 
@@ -28,6 +29,8 @@ interface ClienteFormValues {
 export default function ClientesPage() {
   const { user } = useAuth();
   const canGestionar = (user?.roles.includes("VENDEDOR") || user?.roles.includes("ADMINISTRATIVO")) ?? false;
+  const canVerZonas = user?.roles.includes("ADMINISTRATIVO") ?? false;
+  const [tab, setTab] = useState<"clientes" | "zonas">("clientes");
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [zonaId, setZonaId] = useState<string>("");
@@ -141,7 +144,7 @@ export default function ClientesPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Clientes</h1>
-        {canGestionar && (
+        {canGestionar && tab === "clientes" && (
           <Button
             onClick={() => {
               setSuccess(null);
@@ -153,7 +156,22 @@ export default function ClientesPage() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-800">
+        <TabButton active={tab === "clientes"} onClick={() => setTab("clientes")}>
+          Clientes
+        </TabButton>
+        {canVerZonas && (
+          <TabButton active={tab === "zonas"} onClick={() => setTab("zonas")}>
+            Zonas
+          </TabButton>
+        )}
+      </div>
+
+      {tab === "zonas" ? (
+        <ZonasPage />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
         <input
           type="search"
           value={searchInput}
@@ -292,7 +310,29 @@ export default function ClientesPage() {
           onSubmit={actualizarCliente}
         />
       )}
+        </>
+      )}
     </div>
+  );
+}
+
+function TabButton({ active, onClick, children }: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+        active
+          ? "border-blue-500 text-blue-700 dark:text-blue-300"
+          : "border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

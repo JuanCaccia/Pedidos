@@ -59,13 +59,18 @@ export default function ItemsPage() {
     loadItems();
   }, [loadItems]);
 
-  useEffect(() => {
-    apiGet<Categoria[]>("/api/categorias")
-      .then(setCategorias)
-      .catch(() => {
-        // El filtro de categorías mostrará solo "Todas las categorías"
-      });
+  const loadCategorias = useCallback(async () => {
+    try {
+      const data = await apiGet<Categoria[]>("/api/categorias");
+      setCategorias(data);
+    } catch {
+      // El filtro de categorías mostrará solo "Todas las categorías"
+    }
   }, []);
+
+  useEffect(() => {
+    loadCategorias();
+  }, [loadCategorias]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -88,7 +93,7 @@ export default function ItemsPage() {
     const body: Record<string, unknown> = { nombre, unidadMedida };
     if (stockMinimo !== undefined) body.stockMinimo = stockMinimo;
     if (precioLista !== undefined) body.precioLista = precioLista;
-    if (categoriaId != null) body.categoriaId = categoriaId;
+    body.categoriaId = categoriaId;
     await apiFetch<Item>(`/api/items/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -274,7 +279,10 @@ export default function ItemsPage() {
       {showCategorias && (
         <GestionarCategoriasModal
           onClose={() => setShowCategorias(false)}
-          onCambio={loadItems}
+          onCambio={async () => {
+            await loadItems();
+            await loadCategorias();
+          }}
         />
       )}
     </div>

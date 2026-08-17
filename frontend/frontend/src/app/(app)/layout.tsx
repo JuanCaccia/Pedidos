@@ -216,6 +216,14 @@ function SidebarNav({
           >
             Compras
           </Link>
+          <Link
+            href="/zonas"
+            onClick={onNavigate}
+            aria-current={isActive("/zonas") ? "page" : undefined}
+            className={linkClass("/zonas")}
+          >
+            Zonas
+          </Link>
         </>
       )}
       {(user.roles.includes("VENDEDOR") || user.roles.includes("ADMINISTRATIVO")) && (

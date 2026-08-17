@@ -48,6 +48,52 @@ class ZonaServiceTest {
 				() -> zonaService.crearZona(new GestionarZona.CrearZonaCommand("  ")));
 	}
 
+	@Test
+	void actualizarZonaRenombraYPersiste() {
+		Zona zona = zonaService.crearZona(new GestionarZona.CrearZonaCommand("Zona Oeste"));
+		Zona actualizada = zonaService.actualizarZona(
+				new GestionarZona.ActualizarZonaCommand(zona.getId(), "Zona Oeste 2"));
+		assertEquals("Zona Oeste 2", actualizada.getNombre());
+		assertEquals("Zona Oeste 2", repository.findByNombre("Zona Oeste 2").get().getNombre());
+	}
+
+	@Test
+	void actualizarZonaNombreDuplicadoLanzaBusinessException() {
+		zonaService.crearZona(new GestionarZona.CrearZonaCommand("Zona A"));
+		Zona zonaB = zonaService.crearZona(new GestionarZona.CrearZonaCommand("Zona B"));
+		assertThrows(BusinessException.class,
+				() -> zonaService.actualizarZona(new GestionarZona.ActualizarZonaCommand(zonaB.getId(), "Zona A")));
+	}
+
+	@Test
+	void actualizarZonaMantieneSuPropioNombreNoLanza() {
+		Zona zona = zonaService.crearZona(new GestionarZona.CrearZonaCommand("Zona Misma"));
+		Zona actualizada = zonaService.actualizarZona(
+				new GestionarZona.ActualizarZonaCommand(zona.getId(), "Zona Misma"));
+		assertEquals("Zona Misma", actualizada.getNombre());
+	}
+
+	@Test
+	void desactivarZonaSeteaInactivo() {
+		Zona zona = zonaService.crearZona(new GestionarZona.CrearZonaCommand("Zona Inactiva"));
+		zonaService.desactivarZona(zona.getId());
+		assertEquals(false, repository.findById(zona.getId()).get().isActivo());
+	}
+
+	@Test
+	void reactivarZonaSeteaActivo() {
+		Zona zona = zonaService.crearZona(new GestionarZona.CrearZonaCommand("Zona Reactiva"));
+		zonaService.desactivarZona(zona.getId());
+		zonaService.reactivarZona(zona.getId());
+		assertEquals(true, repository.findById(zona.getId()).get().isActivo());
+	}
+
+	@Test
+	void buscarPorIdDevuelveZona() {
+		Zona zona = zonaService.crearZona(new GestionarZona.CrearZonaCommand("Zona PorId"));
+		assertEquals(zona.getId(), zonaService.buscarPorId(zona.getId()).get().getId());
+	}
+
 	private static class FakeZonaRepository implements ZonaRepository {
 
 		private final Map<Long, Zona> datos = new HashMap<>();

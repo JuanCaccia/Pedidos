@@ -22,6 +22,18 @@ public class Zona extends BaseEntity {
 		this.nombre = nombre;
 	}
 
+	public void renombrar(String nombre) {
+		this.nombre = nombre;
+	}
+
+	public void desactivar() {
+		this.activo = false;
+	}
+
+	public void reactivar() {
+		this.activo = true;
+	}
+
 	public String getNombre() {
 		return nombre;
 	}

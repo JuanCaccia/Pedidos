@@ -10,7 +10,16 @@ public interface GestionarZona {
 	record CrearZonaCommand(String nombre) {
 	}
 
+	record ActualizarZonaCommand(Long zonaId, String nombre) {
+	}
+
 	Zona crearZona(CrearZonaCommand command);
+
+	Zona actualizarZona(ActualizarZonaCommand command);
+
+	void desactivarZona(Long zonaId);
+
+	void reactivarZona(Long zonaId);
 
 	List<Zona> listarTodas();
 

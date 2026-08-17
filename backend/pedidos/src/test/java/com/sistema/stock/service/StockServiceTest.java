@@ -382,7 +382,7 @@ class StockServiceTest {
 		movimientoRepository.save(new MovimientoStock(TipoMovimiento.EGRESO_VENTA, itemId, lote.getId(), 1L,
 				new BigDecimal("30.000"), LocalDateTime.now(), "egreso"));
 		movimientoRepository.save(new MovimientoStock(TipoMovimiento.MERMA, itemId, lote.getId(), null,
-				new BigDecimal("10.000"), LocalDateTime.now(), "merma"));
+				new BigDecimal("-10.000"), LocalDateTime.now(), "merma"));
 
 		assertEquals(0, new BigDecimal("60.000").compareTo(stockService.obtenerDisponibleDeLote(itemId, lote.getId())));
 	}
@@ -498,7 +498,7 @@ class StockServiceTest {
 		boolean mermaDeDescartes = movimientoRepository.findByItemIdOrderByFechaAsc(itemId).stream()
 				.anyMatch(m -> m.getTipo() == TipoMovimiento.MERMA
 						&& lote.getId().equals(m.getLoteId())
-						&& m.getCantidad().compareTo(new BigDecimal("100.000")) == 0);
+						&& m.getCantidad().compareTo(new BigDecimal("-100.000")) == 0);
 		assertTrue(mermaDeDescartes);
 	}
 

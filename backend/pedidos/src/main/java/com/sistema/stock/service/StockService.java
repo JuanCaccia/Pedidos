@@ -168,8 +168,9 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 			throw new BusinessException("MERMA_SIN_STOCK",
 					"No hay suficiente stock físico en el lote para la merma");
 		}
+		// La MERMA se persiste con signo negativo: resta físico, y el frontend la muestra en rojo (-N).
 		return movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.MERMA, item.getId(), lote.getId(),
-				null, command.cantidad(), LocalDateTime.now(), command.motivo().trim()));
+				null, command.cantidad().negate(), LocalDateTime.now(), command.motivo().trim()));
 	}
 
 	// ---------- AjustarInventario ----------
@@ -291,10 +292,11 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 				.map(MovimientoStock::getCantidad)
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 		BigDecimal reservasActivas = obtenerReservasActivas(movimientos, egresos);
-		// Formula de negocio: Disponible = Ingresos - Reservas Activas - Egresos - Mermas (+/- ajuste).
+		// Formula de negocio: Disponible = Ingresos - Reservas Activas - Egresos + Mermas (+/- ajuste).
+		// Las MERMA se persisten con signo negativo (ver registrarMerma), por lo que se SUMAN algebráicamente.
 		// Como el EGRESO_VENTA cierra la reserva que consumio, Reservas Activas = RESERVA - LIBERACION - EGRESO
 		// y el EGRESO se cancela algebraicamente: el resultado es consistente con la fisica del deposito.
-		return ingresos.add(ajustes).subtract(reservasActivas).subtract(egresos).subtract(mermas);
+		return ingresos.add(ajustes).subtract(reservasActivas).subtract(egresos).add(mermas);
 	}
 
 	@Override
@@ -336,7 +338,8 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		BigDecimal ajustes = movimientos.stream()
 				.filter(m -> m.getTipo() == TipoMovimiento.AJUSTE_INVENTARIO && loteId.equals(m.getLoteId()))
 				.map(MovimientoStock::getCantidad).reduce(BigDecimal.ZERO, BigDecimal::add);
-		return ingresos.add(ajustes).subtract(egresos).subtract(mermas);
+		// Mermas negativas se suman algebráicamente (mismo convenio que registrarMerma).
+		return ingresos.add(ajustes).subtract(egresos).add(mermas);
 	}
 
 	@Transactional
@@ -350,7 +353,7 @@ public class StockService implements GestionarItem, RegistrarIngreso, GestionarM
 		BigDecimal disponible = obtenerDisponibleDeLote(lote.getItemId(), lote.getId());
 		if (disponible.signum() > 0) {
 			movimientoStockRepository.save(new MovimientoStock(TipoMovimiento.MERMA, lote.getItemId(), lote.getId(),
-					null, disponible, LocalDateTime.now(), "Descartes de lote " + lote.getCodigoLote()));
+					null, disponible.negate(), LocalDateTime.now(), "Descartes de lote " + lote.getCodigoLote()));
 		}
 		lote.setEstado(LoteEstado.DESCARTADO);
 		return loteRepository.save(lote);

@@ -152,12 +152,12 @@
 
 - **Tipo:** deuda técnica / riesgo de pérdida de trabajo · **Prioridad:** P1
 - **Área:** Git / frontend
-- **Estado:** abierto (requiere decisión antes del checkpoint)
-- **Descripción:** `frontend/frontend` está trackeado en el repo padre como **gitlink (modo 160000)** apuntando a `af430cf` (commit vacío "Initial commit from Create Next App"), pero **no existe `.gitmodules`** → no es un submódulo declarado. El repo anidado **no tiene remote** y **los 11 archivos reales del frontend (todo el app) están sin commitear** en su working tree. Un `actions/checkout` (CI) sin submodules obtendría un frontend vacío/incorrecto; el checkpoint del repo padre NO captura el trabajo real del frontend.
-- **Comportamiento esperado:** el frontend debe quedar versionado de forma reproducible (declarar submódulo con remote + commit del trabajo, o integrarlo como directorio normal del repo padre).
-- **AC:** (a) decidir submódulo vs directorio integrado; (b) commitear el trabajo real del frontend; (c) `.gitmodules` correcto si aplica; (d) CI obtiene el frontend real.
-- **Bloquea milestone:** Sí, para entrega/reproductibilidad; es el punto más crítico del checkpoint.
-- **Milestone:** C8 / cierre
+- **Estado:** ✅ **resuelto (verificado 2026-08-16)** — el frontend se integró como directorio normal del repo padre
+- **Descripción:** `frontend/frontend` estaba trackeado en el repo padre como **gitlink (modo 160000)** apuntando a `af430cf` (commit vacío), **sin `.gitmodules`** → no era un submódulo declarado. El repo anidado no tenía remote y el trabajo real del frontend quedaba sin commitear.
+- **Comportamiento esperado:** el frontend debe quedar versionado de forma reproducible (submódulo con remote o directorio integrado).
+- **AC:** (a) decidir submódulo vs directorio integrado; (b) commitear el trabajo real; (c) `.gitmodules` correcto si aplica; (d) CI obtiene el frontend real.
+- **Estado actual:** ✅ **Resuelto** — decisión tomada: **directorio integrado**. `frontend/frontend` tiene **63 archivos trackeados como blobs normales (100644)**, sin gitlink ni `.gitmodules`, y el repo tiene remote (`origin https://github.com/JuanCaccia/Pedidos.git`). La CI (`actions/checkout@v4` sin submodules) obtiene el frontend real. Verificado con `git ls-files -s frontend/frontend`.
+- **Milestone:** C8 / cierre · **Estado:** resuelto
 
 ### STR-002 — ROADMAP.md desactualizado respecto al estado real
 
@@ -167,13 +167,14 @@
 - **AC:** actualizar conteos, migraciones y estado de C8.
 - **Milestone:** C8 · **Estado:** abierto (se corregirá en PROJECT_STATUS, ROADMAP queda para próxima sesión)
 
-### STR-003 — Higiene de datos de QA en BD viva
+### STR-003 — Higiene de datos de QA en BD viva ✅ RESUELTO
 
 - **Tipo:** limpieza · **Prioridad:** P2
 - **Área:** datos
 - **Descripción:** la prueba QA creó items `QA-TEST` (id 5), `QA-TEST-2` (id 6) y clientes de prueba (incl. id 7 "Verif Auth SA", "Otro Cliente" qa) en la BD local `pedidos`. Requieren limpieza.
 - **AC:** eliminar registros de prueba QA.
-- **Milestone:** C8 · **Estado:** abierto
+- **Estado:** ✅ **Resuelto** — el endpoint `POST /api/test/reset` (STR-005, perfil dev/test) hace `TRUNCATE ... RESTART IDENTITY CASCADE` de las 20 tablas transaccionales y reseedea el `DataSeeder`, dejando la BD dev/test en estado limpio y determinista. Ejecutar una vez el reset limpia cualquier dato residual de QA.
+- **Milestone:** C8 / Hardening · **Estado:** resuelto
 
 ### STR-004 — Sin ordenamiento determinista en la cola de confirmación del backend ✅ RESUELTO
 

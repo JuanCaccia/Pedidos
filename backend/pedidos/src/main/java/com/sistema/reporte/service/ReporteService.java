@@ -2,6 +2,7 @@ package com.sistema.reporte.service;
 
 import com.sistema.cobranza.model.Cobranza;
 import com.sistema.cobranza.port.in.ConsultarCobranza;
+import com.sistema.cliente.port.in.ConsultarCliente;
 import com.sistema.pedido.model.EstadoPedido;
 import com.sistema.pedido.model.Pedido;
 import com.sistema.pedido.port.in.ConsultarPedido;
@@ -15,7 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,14 +33,17 @@ public class ReporteService implements ConsultarReportes {
 	private final ConsultarUsuario consultarUsuario;
 	private final ConsultarRuta consultarRuta;
 	private final ConsultarCobranza consultarCobranza;
+	private final ConsultarCliente consultarCliente;
 
 	public ReporteService(ConsultarStock consultarStock, ConsultarPedido consultarPedido,
-			ConsultarUsuario consultarUsuario, ConsultarRuta consultarRuta, ConsultarCobranza consultarCobranza) {
+			ConsultarUsuario consultarUsuario, ConsultarRuta consultarRuta, ConsultarCobranza consultarCobranza,
+			ConsultarCliente consultarCliente) {
 		this.consultarStock = consultarStock;
 		this.consultarPedido = consultarPedido;
 		this.consultarUsuario = consultarUsuario;
 		this.consultarRuta = consultarRuta;
 		this.consultarCobranza = consultarCobranza;
+		this.consultarCliente = consultarCliente;
 	}
 
 	@Override
@@ -140,6 +147,33 @@ public class ReporteService implements ConsultarReportes {
 		return new ResumenCaja(total, cobranzas.size(),
 				new ArrayList<>(porForma.values()), new ArrayList<>(porDia.values()),
 				new ArrayList<>(porVendedor.values()));
+	}
+
+	@Override
+	public List<CobranzaExport> cobranzasExport(Long clienteId, LocalDate desde, LocalDate hasta) {
+		List<Cobranza> cobranzas = consultarCobranza.listar(clienteId, desde, hasta).stream()
+				.sorted(Comparator.comparing(Cobranza::getFecha).thenComparing(Cobranza::getId))
+				.toList();
+		// Saldo corriente: monto total vendido del cliente menos lo cobrado acumulado
+		// hasta esa cobranza (orden cronológico). Refleja cómo decrece la deuda.
+		Map<Long, BigDecimal> vendidoPorCliente = new HashMap<>();
+		Map<Long, BigDecimal> cobradoAcumulado = new HashMap<>();
+		List<CobranzaExport> resultado = new ArrayList<>();
+		for (Cobranza c : cobranzas) {
+			BigDecimal vendido = vendidoPorCliente.computeIfAbsent(c.getClienteId(),
+					id -> consultarCobranza.estadoCuenta(id).totalVendido());
+			BigDecimal acumulado = cobradoAcumulado.merge(c.getClienteId(), c.getMonto(), BigDecimal::add);
+			String nombreCliente = consultarCliente.buscarPorId(c.getClienteId())
+					.map(com.sistema.cliente.model.Cliente::getRazonSocial)
+					.orElse(null);
+			String numeroPedido = c.getPedidoId() == null ? null
+					: consultarPedido.buscarPorId(c.getPedidoId()).map(Pedido::getNumero).orElse(null);
+			resultado.add(new CobranzaExport(c.getFecha(), c.getClienteId(), nombreCliente, c.getPedidoId(),
+					numeroPedido, c.getMonto(),
+					c.getFormaPago() == null ? null : c.getFormaPago().name(),
+					c.getObservaciones(), vendido.subtract(acumulado)));
+		}
+		return resultado;
 	}
 
 	private static class VentasAcumuladas {

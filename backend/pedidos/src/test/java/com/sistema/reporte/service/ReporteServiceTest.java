@@ -4,6 +4,9 @@ import com.sistema.common.model.PageResponse;
 import com.sistema.cobranza.model.Cobranza;
 import com.sistema.cobranza.model.FormaPago;
 import com.sistema.cobranza.port.in.ConsultarCobranza;
+import com.sistema.cliente.model.Cliente;
+import com.sistema.cliente.port.in.ConsultarCliente;
+import com.sistema.common.model.Zona;
 import com.sistema.pedido.model.EstadoPedido;
 import com.sistema.pedido.model.Pedido;
 import com.sistema.pedido.model.PedidoItem;
@@ -68,7 +71,40 @@ class ReporteServiceTest {
 				return new PageResponse<>(List.of(), page, size, 0, 0);
 			}
 		};
-		reporteService = new ReporteService(fakeStock, fakePedido, fakeUsuario, fakeRuta, fakeCobranza);
+		ConsultarCliente fakeCliente = new ConsultarCliente() {
+			@Override
+			public Optional<Cliente> buscarPorId(Long id) {
+				Cliente c = new Cliente("Cliente " + id, "20-" + id, new Zona("Zona " + id));
+				c.setId(id);
+				return Optional.of(c);
+			}
+
+			@Override
+			public Optional<Cliente> buscarPorCuit(String cuit) {
+				return Optional.empty();
+			}
+
+			@Override
+			public List<Cliente> listarTodos() {
+				return List.of();
+			}
+
+			@Override
+			public List<Cliente> listarPorZona(Long zonaId) {
+				return List.of();
+			}
+
+			@Override
+			public PageResponse<Cliente> listarPaginado(String q, Long zonaId, int page, int size) {
+				return new PageResponse<>(List.of(), page, size, 0, 0);
+			}
+
+			@Override
+			public PageResponse<Cliente> listarActivosPaginado(String q, Long zonaId, int page, int size) {
+				return new PageResponse<>(List.of(), page, size, 0, 0);
+			}
+		};
+		reporteService = new ReporteService(fakeStock, fakePedido, fakeUsuario, fakeRuta, fakeCobranza, fakeCliente);
 	}
 
 	private Pedido pedidoEntregado(Long vendedorId, BigDecimal entregada, BigDecimal precio, LocalDateTime fecha) {
@@ -172,12 +208,35 @@ class ReporteServiceTest {
 		assertEquals(0, new BigDecimal("50.00").compareTo(sinVendedor.monto()));
 	}
 
+	@Test
+	void cobranzasExportDevuelveDatosYSaldoCorriente() {
+		fakeCobranza.vendido.put(1L, new BigDecimal("150.00"));
+		fakePedido.pedidos.add(pedidoEntregado(1L, BigDecimal.ZERO, BigDecimal.ZERO, LocalDateTime.of(2026, 8, 1, 10, 0)));
+
+		LocalDateTime fecha = LocalDateTime.of(2026, 8, 10, 10, 0);
+		fakeCobranza.cobranzas.add(new Cobranza(1L, null,
+				new BigDecimal("50.00"), FormaPago.EFECTIVO, fecha, "adelanto"));
+		fakeCobranza.cobranzas.add(new Cobranza(1L, null,
+				new BigDecimal("70.00"), FormaPago.TRANSFERENCIA, fecha.plusDays(1), null));
+
+		List<ConsultarReportes.CobranzaExport> export = reporteService.cobranzasExport(1L, null, null);
+
+		assertEquals(2, export.size());
+		assertEquals("Cliente 1", export.get(0).clienteNombre());
+		assertEquals("EFECTIVO", export.get(0).formaPago());
+		assertEquals(0, new BigDecimal("100.00").compareTo(export.get(0).saldo()));
+		assertEquals(0, new BigDecimal("30.00").compareTo(export.get(1).saldo()));
+		assertEquals("adelanto", export.get(0).observaciones());
+	}
+
 	private static class FakeCobranza implements ConsultarCobranza {
 		private final List<Cobranza> cobranzas = new ArrayList<>();
+		private final Map<Long, BigDecimal> vendido = new HashMap<>();
 
 		@Override
 		public List<Cobranza> listar(Long clienteId, LocalDate desde, LocalDate hasta) {
 			return cobranzas.stream()
+					.filter(c -> clienteId == null || c.getClienteId().equals(clienteId))
 					.filter(c -> desde == null || !c.getFecha().toLocalDate().isBefore(desde))
 					.filter(c -> hasta == null || !c.getFecha().toLocalDate().isAfter(hasta))
 					.toList();
@@ -185,7 +244,13 @@ class ReporteServiceTest {
 
 		@Override
 		public ConsultarCobranza.EstadoCuenta estadoCuenta(Long clienteId) {
-			return null;
+			BigDecimal cobrado = cobranzas.stream()
+					.filter(c -> c.getClienteId().equals(clienteId))
+					.map(Cobranza::getMonto)
+					.reduce(BigDecimal.ZERO, BigDecimal::add);
+			BigDecimal totalVendido = vendido.getOrDefault(clienteId, BigDecimal.ZERO);
+			return new ConsultarCobranza.EstadoCuenta(clienteId, totalVendido, cobrado,
+					totalVendido.subtract(cobrado));
 		}
 	}
 

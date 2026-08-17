@@ -337,11 +337,59 @@ class PedidoServiceTest {
 		List<Pedido> hijos = pedidoRepository.findByPedidoPadreId(pedido.getId());
 		assertEquals(1, hijos.size());
 		Pedido hijo = hijos.get(0);
-		assertEquals(EstadoPedido.PENDIENTE_CONFIRMACION, hijo.getEstado());
+		// El hijo del saldo nace PENDIENTE_PREPARACION y reserva el stock disponible
+		// (no vuelve a exigir confirmación manual).
+		assertEquals(EstadoPedido.PENDIENTE_PREPARACION, hijo.getEstado());
 		assertEquals(pedido.getId(), hijo.getPedidoPadreId());
 		assertEquals(1, hijo.getItems().size());
 		assertEquals(0, new BigDecimal("2.000").compareTo(hijo.getItems().get(0).getCantidadPedida()));
+		assertEquals(0, new BigDecimal("2.000").compareTo(hijo.getItems().get(0).getCantidadReservada()));
+		assertFalse(hijo.getItems().get(0).isPendienteStock());
 		assertTrue(remitosGenerados.contains(pedido.getId()));
+	}
+
+	@Test
+	void reintentarStockCubrePendienteYPasaAPreparacion() {
+		stockGateway.disponible.put(10L, new BigDecimal("6.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+		assertEquals(EstadoPedido.PENDIENTE_STOCK, pedido.getEstado());
+		assertTrue(pedido.getItems().get(0).isPendienteStock());
+		stockGateway.disponible.put(10L, new BigDecimal("4.000"));
+
+		Pedido reintentado = pedidoService.reintentarStock(pedido.getId());
+
+		assertEquals(EstadoPedido.PENDIENTE_PREPARACION, reintentado.getEstado());
+		assertFalse(reintentado.getItems().get(0).isPendienteStock());
+		assertEquals(0, new BigDecimal("10.000").compareTo(reintentado.getItems().get(0).getCantidadReservada()));
+		assertEquals(0, BigDecimal.ZERO.compareTo(stockGateway.disponible.get(10L)));
+	}
+
+	@Test
+	void reintentarStockReservaLoDisponibleYMantienePendiente() {
+		stockGateway.disponible.put(10L, new BigDecimal("6.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+		pedidoService.confirmarPedido(pedido.getId());
+		assertEquals(EstadoPedido.PENDIENTE_STOCK, pedido.getEstado());
+		stockGateway.disponible.put(10L, new BigDecimal("2.000"));
+
+		Pedido reintentado = pedidoService.reintentarStock(pedido.getId());
+
+		assertEquals(EstadoPedido.PENDIENTE_STOCK, reintentado.getEstado());
+		assertTrue(reintentado.getItems().get(0).isPendienteStock());
+		assertEquals(0, new BigDecimal("8.000").compareTo(reintentado.getItems().get(0).getCantidadReservada()));
+		assertEquals(0, BigDecimal.ZERO.compareTo(stockGateway.disponible.get(10L)));
+	}
+
+	@Test
+	void reintentarStockSoloPermitePendienteStock() {
+		stockGateway.disponible.put(10L, new BigDecimal("100.000"));
+		Pedido pedido = crearPedido(10L, new BigDecimal("10.000"));
+
+		assertThrows(BusinessException.class, () -> pedidoService.reintentarStock(pedido.getId()));
+
+		Pedido confirmado = pedidoService.confirmarPedido(pedido.getId());
+		assertThrows(BusinessException.class, () -> pedidoService.reintentarStock(confirmado.getId()));
 	}
 
 	@Test

@@ -809,6 +809,19 @@ function IngresoForm({
             className={INPUT_CLASS}
             placeholder="Opcional. Ej.: 125.50"
           />
+          {(() => {
+            if (!itemId) return null;
+            const selected = items.find((i) => i.id === Number(itemId));
+            if (!selected) return null;
+            const precio = Number(precioUnitario);
+            if (precioUnitario === "" || Number.isNaN(precio) || precio <= selected.precioLista) return null;
+            return (
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                El costo supera el precio de venta ({formatMoney(selected.precioLista)}). Verificá el costo
+                ingresado.
+              </p>
+            );
+          })()}
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="ingreso-motivo" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">

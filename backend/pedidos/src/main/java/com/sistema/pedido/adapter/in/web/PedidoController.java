@@ -128,6 +128,13 @@ public class PedidoController {
 		return ResponseEntity.ok(PedidoResponse.from(pedido));
 	}
 
+	@PostMapping("/{id}/reintentar-stock")
+	@Operation(summary = "Re-evalua la reserva de un pedido PENDIENTE_STOCK contra el stock actual; si se cubre todo pasa a PENDIENTE_PREPARACION")
+	public ResponseEntity<PedidoResponse> reintentarStock(@PathVariable Long id) {
+		Pedido pedido = modificarStockPedido.reintentarStock(id);
+		return ResponseEntity.ok(PedidoResponse.from(pedido));
+	}
+
 	@PostMapping("/{id}/marcar-faltante")
 	@Operation(summary = "Marca un faltante/danado de una linea; registra merma y deja el pedido en backorder (PENDIENTE_STOCK)")
 	public ResponseEntity<PedidoResponse> marcarFaltante(@PathVariable Long id,

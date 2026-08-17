@@ -2,6 +2,7 @@ package com.sistema.reporte.port.in;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface ConsultarReportes {
@@ -30,6 +31,10 @@ public interface ConsultarReportes {
 			int cantidadPedidos) {
 	}
 
+	record CobranzaExport(LocalDateTime fecha, Long clienteId, String clienteNombre, Long pedidoId, String pedidoNumero,
+			BigDecimal monto, String formaPago, String observaciones, BigDecimal saldo) {
+	}
+
 	List<ItemStockReporte> stockGeneral();
 
 	List<VentaVendedorReporte> ventasPorVendedor(Long vendedorId, LocalDate desde, LocalDate hasta);
@@ -37,4 +42,6 @@ public interface ConsultarReportes {
 	List<RutaReporte> rutasPorFecha(LocalDate fecha);
 
 	ResumenCaja resumenCaja(LocalDate desde, LocalDate hasta);
+
+	List<CobranzaExport> cobranzasExport(Long clienteId, LocalDate desde, LocalDate hasta);
 }

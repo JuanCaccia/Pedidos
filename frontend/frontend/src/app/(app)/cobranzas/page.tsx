@@ -196,6 +196,20 @@ export default function CobranzasPage() {
     }
   }
 
+  async function exportarCobranzas() {
+    try {
+      const params = new URLSearchParams();
+      if (clienteId) params.set("clienteId", clienteId);
+      const query = params.toString();
+      await exportarCSV(
+        `/api/reportes/cobranzas/exportar.csv${query ? `?${query}` : ""}`,
+        "cobranzas.csv"
+      );
+    } catch (err) {
+      setCobranzasError(err instanceof Error ? err.message : "Error inesperado");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -380,8 +394,11 @@ export default function CobranzasPage() {
       </section>
 
       <section className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="border-b border-neutral-200 px-5 py-3.5 dark:border-neutral-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 px-5 py-3.5 dark:border-neutral-800">
           <h2 className="font-medium text-neutral-900 dark:text-neutral-100">Cobranzas</h2>
+          <Button variant="secondary" className="px-3 py-1.5" onClick={exportarCobranzas}>
+            Exportar cobranzas
+          </Button>
         </div>
         {cobranzasError && (
           <div className="px-5 pt-5">

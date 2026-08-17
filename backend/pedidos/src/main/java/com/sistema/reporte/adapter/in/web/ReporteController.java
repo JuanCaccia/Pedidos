@@ -105,6 +105,29 @@ public class ReporteController {
 		return csv("caja", headers, filas);
 	}
 
+	@GetMapping("/cobranzas/exportar.csv")
+	@Operation(summary = "Exporta el historial de cobranzas a CSV (filtrable por cliente y fechas)")
+	public ResponseEntity<byte[]> cobranzasCsv(
+			@RequestParam(required = false) Long clienteId,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+		List<String> headers = List.of("fecha", "clienteId", "cliente", "pedidoId", "pedidoNumero", "monto",
+				"formaPago", "observaciones", "saldo");
+		List<List<String>> filas = new ArrayList<>();
+		for (ConsultarReportes.CobranzaExport c : consultarReportes.cobranzasExport(clienteId, desde, hasta)) {
+			filas.add(List.of(String.valueOf(c.fecha()),
+					String.valueOf(c.clienteId()),
+					c.clienteNombre() == null ? "" : c.clienteNombre(),
+					c.pedidoId() == null ? "" : String.valueOf(c.pedidoId()),
+					c.pedidoNumero() == null ? "" : c.pedidoNumero(),
+					c.monto() == null ? "" : c.monto().toPlainString(),
+					c.formaPago() == null ? "" : c.formaPago(),
+					c.observaciones() == null ? "" : c.observaciones(),
+					c.saldo() == null ? "" : c.saldo().toPlainString()));
+		}
+		return csv("cobranzas", headers, filas);
+	}
+
 	private ResponseEntity<byte[]> csv(String nombre, List<String> headers, List<List<String>> filas) {
 		String csv = CsvWriter.escribir(headers, filas);
 		HttpHeaders headersResp = new HttpHeaders();

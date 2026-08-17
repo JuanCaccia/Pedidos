@@ -191,7 +191,39 @@ public class PedidoService implements CrearPedido, ConfirmarPedido, GestionarEnt
 			}
 		}
 		hijo.setNumero("PED-" + String.format("%06d", System.nanoTime() % 1000000));
-		pedidoRepository.save(hijo);
+		Pedido guardado = pedidoRepository.save(hijo);
+		// El hijo es el "saldo" del padre entregado: reserva el stock disponible ahora
+		// (PENDIENTE_PREPARACION) o queda en backorder (PENDIENTE_STOCK) sin exigir
+		// confirmación manual nuevamente.
+		reservarDisponibleSinBloqueo(guardado);
+		pedidoRepository.save(guardado);
+	}
+
+	/**
+	 * Reserva para cada item el stock disponible actual contra lo que aún falta
+	 * cubrir (cantidad pedida - cantidad reservada). NO bloquea: si no hay stock
+	 * marca la linea como pendiente y el pedido queda PENDIENTE_STOCK; si todo se
+	 * cubre pasa a PENDIENTE_PREPARACION. Usado por el reintento de backorder y
+	 * por el pedido hijo de una entrega parcial.
+	 */
+	private boolean reservarDisponibleSinBloqueo(Pedido pedido) {
+		for (PedidoItem item : pedido.getItems()) {
+			BigDecimal pendiente = item.getCantidadPedida().subtract(item.getCantidadReservada());
+			if (pendiente.signum() <= 0) {
+				continue;
+			}
+			BigDecimal disponible = stockGateway.consultarDisponible(item.getItemId());
+			if (disponible.signum() <= 0) {
+				item.marcarPendienteStock();
+				continue;
+			}
+			BigDecimal aReservar = pendiente.min(disponible);
+			stockGateway.reservar(item.getItemId(), pedido.getId(), aReservar);
+			item.agregarStock(aReservar);
+		}
+		boolean stockIncompleto = pedido.getItems().stream().anyMatch(PedidoItem::isPendienteStock);
+		pedido.setEstado(stockIncompleto ? EstadoPedido.PENDIENTE_STOCK : EstadoPedido.PENDIENTE_PREPARACION);
+		return stockIncompleto;
 	}
 
 	@Override
@@ -280,6 +312,18 @@ public class PedidoService implements CrearPedido, ConfirmarPedido, GestionarEnt
 				&& pedido.getItems().stream().noneMatch(PedidoItem::isPendienteStock)) {
 			pedido.setEstado(EstadoPedido.PENDIENTE_PREPARACION);
 		}
+		return pedidoRepository.save(pedido);
+	}
+
+	@Override
+	@Transactional
+	public Pedido reintentarStock(Long pedidoId) {
+		Pedido pedido = obtenerO404(pedidoId);
+		if (pedido.getEstado() != EstadoPedido.PENDIENTE_STOCK) {
+			throw new BusinessException("PEDIDO_ESTADO_INVALIDO",
+					"Solo los pedidos en PENDIENTE_STOCK pueden reintentar la reserva");
+		}
+		reservarDisponibleSinBloqueo(pedido);
 		return pedidoRepository.save(pedido);
 	}
 

@@ -193,6 +193,20 @@ function PedidosPageInner() {
     }
   }
 
+  async function reintentarStock(pedido: Pedido) {
+    try {
+      const actualizado = await apiPost<Pedido>(`/api/pedidos/${pedido.id}/reintentar-stock`);
+      if (actualizado.estado === "PENDIENTE_PREPARACION") {
+        showToast(`Stock asignado: ${actualizado.numero} pasó a preparación.`);
+      } else {
+        showToast(`Se asignó stock parcial a ${actualizado.numero}.`);
+      }
+      await loadPedidos();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    }
+  }
+
   async function reagendar(pedido: Pedido) {
     try {
       await apiPost<Pedido>(`/api/pedidos/${pedido.id}/reagendar`);
@@ -480,6 +494,10 @@ function PedidosPageInner() {
                     clientesById={clientesById}
                     enRutaHoy={enViajeClienteIds.has(pedido.clienteId)}
                     onDetalle={() => openDetalle(pedido)}
+                    puedeReintentarStock={
+                      pedido.estado === "PENDIENTE_STOCK" && hasAnyRole("ENCARGADO_DEPOSITO", "ADMINISTRATIVO")
+                    }
+                    onReintentarStock={() => reintentarStock(pedido)}
                     mostrarCheckbox={mostrarCheckboxes}
                     seleccionado={seleccionados.has(pedido.id)}
                     onToggleSeleccion={(checked) => {
@@ -510,6 +528,7 @@ function PedidosPageInner() {
             hasAnyRole={hasAnyRole}
             onConfirm={() => confirmar(detallePedido)}
             onDespachar={() => despachar(detallePedido)}
+            onReintentarStock={() => reintentarStock(detallePedido)}
             onReagendar={() => reagendar(detallePedido)}
             onRechazar={() => setRechazarPedido(detallePedido)}
             onSustituir={() => {
@@ -602,6 +621,8 @@ function PedidoRow({
   mostrarCheckbox,
   seleccionado,
   onToggleSeleccion,
+  puedeReintentarStock,
+  onReintentarStock,
 }: {
   pedido: Pedido;
   clientesById: Map<number, Cliente>;
@@ -610,6 +631,8 @@ function PedidoRow({
   mostrarCheckbox: boolean;
   seleccionado: boolean;
   onToggleSeleccion: (checked: boolean) => void;
+  puedeReintentarStock: boolean;
+  onReintentarStock: () => void;
 }) {
   const cliente = clientesById.get(pedido.clienteId);
 
@@ -652,10 +675,17 @@ function PedidoRow({
       </td>
       <td className="px-4 py-3 text-right text-neutral-700 dark:text-neutral-300">{formatMoney(pedido.total)}</td>
       <td className="px-4 py-3 text-neutral-500">{formatDateTime(pedido.fechaCreacion)}</td>
-      <td className="px-4 py-3 text-right">
-        <Button variant="secondary" onClick={onDetalle}>
-          Detalle
-        </Button>
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-end gap-2">
+          {puedeReintentarStock && (
+            <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={onReintentarStock}>
+              Reintentar stock
+            </Button>
+          )}
+          <Button variant="secondary" onClick={onDetalle}>
+            Detalle
+          </Button>
+        </div>
       </td>
     </tr>
   );
@@ -667,6 +697,7 @@ function PedidoDetalle({
   hasAnyRole,
   onConfirm,
   onDespachar,
+  onReintentarStock,
   onReagendar,
   onRechazar,
   onSustituir,
@@ -683,11 +714,12 @@ function PedidoDetalle({
   hasAnyRole: (...roles: string[]) => boolean;
   onConfirm: () => void;
   onDespachar: () => void;
+  onReintentarStock: () => void;
   onReagendar: () => void;
   onRechazar: () => void;
   onSustituir: () => void;
-  onRegistrarEntrega: () => void;
   onMarcarFaltante: (item: PedidoItem) => void;
+  onRegistrarEntrega: () => void;
   onVerHijos: () => void;
   verHijosActivo: boolean;
   hijos: Pedido[] | undefined;
@@ -788,6 +820,9 @@ function PedidoDetalle({
         )}
         {pedido.estado === "PENDIENTE_PREPARACION" && hasAnyRole("ENCARGADO_DEPOSITO", "ADMINISTRATIVO") && (
           <Button onClick={onDespachar}>Despachar</Button>
+        )}
+        {pedido.estado === "PENDIENTE_STOCK" && hasAnyRole("ENCARGADO_DEPOSITO", "ADMINISTRATIVO") && (
+          <Button onClick={onReintentarStock}>Reintentar / Asignar stock</Button>
         )}
         {(pedido.estado === "PENDIENTE_ENTREGA" || pedido.estado === "EN_VIAJE") &&
           hasAnyRole("REPARTIDOR", "ADMINISTRATIVO") && (

@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost, apiUploadCsv } from "@/lib/api";
 import type { Categoria, EstadoOrdenCompra, ImportacionCsvResponse, Item, OrdenCompra, PageResponse, Proveedor, StockInfo } from "@/lib/types";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import Loading from "@/components/Loading";
 import ErrorBox from "@/components/ErrorBox";
 import Button from "@/components/Button";
@@ -411,37 +411,48 @@ function RecepcionPanel({
       <div className="space-y-2">
         {orden.lineas.map((linea) => {
           const item = itemsById.get(linea.itemId);
+          const precioIngresado = Number(precios[linea.id] ?? "");
+          const precioSuperaLista =
+            !Number.isNaN(precioIngresado) && item != null && precioIngresado > item.precioLista;
           return (
-            <div key={linea.id} className="grid grid-cols-[1fr_6rem_7rem_auto] items-center gap-2">
-              <span className="truncate text-sm text-neutral-700 dark:text-neutral-300">
-                {item ? `${item.sku} — ${item.nombre}` : `#${linea.itemId}`}
-              </span>
-              <input
-                type="number"
-                min="0.001"
-                step="0.001"
-                max={linea.restante}
-                value={values[linea.id] ?? ""}
-                onChange={(e) =>
-                  setValues((prev) => ({ ...prev, [linea.id]: e.target.value }))
-                }
-                aria-label={`Cantidad a recibir línea ${linea.id}`}
-                placeholder="Cant."
-                className={INPUT_CLASS}
-              />
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={precios[linea.id] ?? ""}
-                onChange={(e) =>
-                  setPrecios((prev) => ({ ...prev, [linea.id]: e.target.value }))
-                }
-                aria-label={`Precio unitario línea ${linea.id}`}
-                placeholder="Precio"
-                className={INPUT_CLASS}
-              />
-              <span className="text-xs text-neutral-500">restante: {formatNumber(linea.restante)}</span>
+            <div key={linea.id} className="flex flex-col gap-1">
+              <div className="grid grid-cols-[1fr_6rem_7rem_auto] items-center gap-2">
+                <span className="truncate text-sm text-neutral-700 dark:text-neutral-300">
+                  {item ? `${item.sku} — ${item.nombre}` : `#${linea.itemId}`}
+                </span>
+                <input
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  max={linea.restante}
+                  value={values[linea.id] ?? ""}
+                  onChange={(e) =>
+                    setValues((prev) => ({ ...prev, [linea.id]: e.target.value }))
+                  }
+                  aria-label={`Cantidad a recibir línea ${linea.id}`}
+                  placeholder="Cant."
+                  className={INPUT_CLASS}
+                />
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={precios[linea.id] ?? ""}
+                  onChange={(e) =>
+                    setPrecios((prev) => ({ ...prev, [linea.id]: e.target.value }))
+                  }
+                  aria-label={`Precio unitario línea ${linea.id}`}
+                  placeholder="Precio"
+                  className={INPUT_CLASS}
+                />
+                <span className="text-xs text-neutral-500">restante: {formatNumber(linea.restante)}</span>
+              </div>
+              {precioSuperaLista && (
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                  El costo supera el precio de venta ({formatMoney(item?.precioLista ?? 0)}). Verificá el costo
+                  ingresado.
+                </p>
+              )}
             </div>
           );
         })}

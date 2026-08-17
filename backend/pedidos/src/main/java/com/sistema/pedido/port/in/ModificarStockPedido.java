@@ -9,6 +9,8 @@ public interface ModificarStockPedido {
 
 	Pedido agregarUnidades(Long pedidoId, Long itemId, BigDecimal cantidad);
 
+	Pedido reintentarStock(Long pedidoId);
+
 	Pedido marcarFaltante(MarcarFaltanteCommand command);
 
 	Pedido consolidarPedidos(ConsolidarCommand command);

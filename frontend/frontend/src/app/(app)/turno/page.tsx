@@ -247,7 +247,7 @@ export default function TurnoPage() {
     return (
       <div className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col items-center justify-center gap-4 px-4">
         <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-          Turno de repartidor
+          Mis entregas del día
         </h1>
         <p className="text-center text-sm text-neutral-500">
           Esta vista es solo para usuarios repartidor o administrativo.
@@ -262,7 +262,7 @@ export default function TurnoPage() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 pb-52 pt-4 sm:pt-8">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Turno</h1>
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Mis entregas</h1>
         <p className="text-sm text-neutral-500">Entregas del día, una por una.</p>
       </div>
 

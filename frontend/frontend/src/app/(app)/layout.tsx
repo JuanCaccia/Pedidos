@@ -253,7 +253,7 @@ function SidebarNav({
           aria-current={isActive("/turno") ? "page" : undefined}
           className={linkClass("/turno")}
         >
-          Turno
+          Mis entregas
         </Link>
       )}
       {user.roles.includes("ADMINISTRATIVO") && (

@@ -18,4 +18,6 @@ public interface ConsultarRuta {
 	List<Ruta> listarPorRepartidor(Long repartidorId);
 
 	List<Ruta> listarPorEstado(EstadoRuta estado);
+
+	boolean pedidoPerteneceARepartidor(Long repartidorId, Long pedidoId);
 }

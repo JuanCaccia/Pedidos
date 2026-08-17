@@ -7,11 +7,15 @@ import com.sistema.cobranza.port.in.ConsultarCobranza;
 import com.sistema.cobranza.port.in.ConsultarCobranza.EstadoCuenta;
 import com.sistema.cobranza.port.in.RegistrarCobranza;
 import com.sistema.cobranza.port.in.RegistrarCobranza.RegistrarCobranzaCommand;
+import com.sistema.common.exception.BusinessException;
+import com.sistema.usuario.model.Usuario;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,7 +43,7 @@ public class CobranzaController {
 	@PostMapping
 	public ResponseEntity<CobranzaResponse> registrar(@Valid @RequestBody CobranzaRequest request) {
 		Cobranza cobranza = registrarCobranza.registrar(new RegistrarCobranzaCommand(request.clienteId(),
-				request.pedidoId(), request.monto(), request.formaPago(), request.observaciones()));
+				request.pedidoId(), request.monto(), request.formaPago(), request.observaciones(), obtenerActorActual()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(CobranzaResponse.from(cobranza));
 	}
 
@@ -55,5 +59,13 @@ public class CobranzaController {
 	@GetMapping("/clientes/{id}/cuenta")
 	public ResponseEntity<EstadoCuenta> estadoCuenta(@PathVariable Long id) {
 		return ResponseEntity.ok(consultarCobranza.estadoCuenta(id));
+	}
+
+	private Usuario obtenerActorActual() {
+		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		if (auth != null && auth.getPrincipal() instanceof Usuario usuario) {
+			return usuario;
+		}
+		throw new BusinessException("AUTH_INVALIDO", "No autenticado");
 	}
 }

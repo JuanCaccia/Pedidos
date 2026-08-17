@@ -91,7 +91,7 @@ public class SustitucionService implements RegistrarSustitucion {
 			registrarCobranza.registrar(new RegistrarCobranza.RegistrarCobranzaCommand(pedido.getClienteId(),
 					command.pedidoId(), diferenciaPrecio, FormaPago.OTRO,
 					"Sustitución pedido " + command.pedidoId() + " (" + command.itemOriginalId() + "→"
-							+ command.itemSustitutoId() + ")"));
+							+ command.itemSustitutoId() + ")", command.actor()));
 		}
 
 		return sustitucion;

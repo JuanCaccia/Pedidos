@@ -608,4 +608,219 @@ class PedidosIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.totalElements").value(1));
 	}
+
+	// ---- Matriz de autorización Etapa 1 ----
+
+	@Test
+	void adminPuedeCrearZonas() throws Exception {
+		mockMvc.perform(post("/zonas")
+						.header("Authorization", "Bearer " + login())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"nombre\":\"Zona Admin IT\"}"))
+				.andExpect(status().isCreated());
+	}
+
+	@Test
+	void repartidorNoPuedePlanificarRutas() throws Exception {
+		String repartidorToken = loginRepartidor().token;
+
+		mockMvc.perform(post("/rutas")
+						.header("Authorization", "Bearer " + repartidorToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"zonaId\":1,\"repartidorId\":1,\"fechaJornada\":\"2026-01-01\",\"pedidoIds\":[1]}"))
+				.andExpect(status().isForbidden());
+
+		mockMvc.perform(post("/rutas/1/pedidos")
+						.header("Authorization", "Bearer " + repartidorToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"pedidoIds\":[1]}"))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void repartidorPuedeOperarRutaPeroNoZonas() throws Exception {
+		String token = login();
+		RutaFlujo flujo = prepararPedidoParaRuta(token);
+		Sesion rep = loginRepartidor();
+		Integer rutaId = crearRuta(token, flujo, rep.usuarioId);
+
+		// El repartidor puede iniciar la jornada de su ruta.
+		mockMvc.perform(post("/rutas/" + rutaId + "/iniciar").header("Authorization", "Bearer " + rep.token))
+				.andExpect(status().isOk());
+
+		// Cerrar: autorizado (no 403), pero los pedidos siguen EN_VIAJE => 409.
+		mockMvc.perform(post("/rutas/" + rutaId + "/cerrar").header("Authorization", "Bearer " + rep.token))
+				.andExpect(status().isConflict());
+
+		// El repartidor NO puede hacer ABMC de zonas.
+		mockMvc.perform(post("/zonas")
+						.header("Authorization", "Bearer " + rep.token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"nombre\":\"Zona no autorizada\"}"))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(put("/zonas/" + flujo.zonaId)
+						.header("Authorization", "Bearer " + rep.token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"nombre\":\"Zona editada\"}"))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void repartidorCobraPedidoDeSuRuta() throws Exception {
+		String token = login();
+		RutaFlujo flujo = prepararPedidoParaRuta(token);
+		Sesion rep = loginRepartidor();
+		Integer rutaId = crearRuta(token, flujo, rep.usuarioId);
+		mockMvc.perform(post("/rutas/" + rutaId + "/iniciar").header("Authorization", "Bearer " + rep.token))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/cobranzas")
+						.header("Authorization", "Bearer " + rep.token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"clienteId\":" + flujo.clienteId + ",\"pedidoId\":" + flujo.pedidoId
+								+ ",\"monto\":10.00,\"formaPago\":\"EFECTIVO\"}"))
+				.andExpect(status().isCreated());
+	}
+
+	@Test
+	void repartidorCobraSinPedidoRechazado() throws Exception {
+		Sesion rep = loginRepartidor();
+		Integer clienteId = obtenerClienteId(rep.token, "Cliente Demo");
+
+		mockMvc.perform(post("/cobranzas")
+						.header("Authorization", "Bearer " + rep.token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"clienteId\":" + clienteId + ",\"monto\":10.00,\"formaPago\":\"EFECTIVO\"}"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("COBRANZA_REPARTIDOR_SIN_PEDIDO"));
+	}
+
+	@Test
+	void repartidorCobraPedidoDeOtraRutaRechazado() throws Exception {
+		String token = login();
+		Integer repartidor2Id = crearRepartidor(token);
+		RutaFlujo flujo2 = prepararPedidoParaRuta(token);
+		Integer ruta2Id = crearRuta(token, flujo2, repartidor2Id);
+		mockMvc.perform(post("/rutas/" + ruta2Id + "/iniciar").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk());
+
+		Sesion rep = loginRepartidor();
+		mockMvc.perform(post("/cobranzas")
+						.header("Authorization", "Bearer " + rep.token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"clienteId\":" + flujo2.clienteId + ",\"pedidoId\":" + flujo2.pedidoId
+								+ ",\"monto\":10.00,\"formaPago\":\"EFECTIVO\"}"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("COBRANZA_PEDIDO_NO_EN_RUTA"));
+	}
+
+	@Test
+	void vendedorPuedeCrearPedidoYCobrarSinPedido() throws Exception {
+		String vlogin = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"vendedor@pedidos.com\",\"password\":\"vendedor123\"}"))
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+		String vtoken = JsonPath.read(vlogin, "$.token");
+		Integer vendedorId = JsonPath.read(vlogin, "$.usuarioId");
+		Integer clienteId = obtenerClienteId(vtoken, "Cliente Demo");
+		Integer itemId = obtenerItemId(vtoken, "HAR-000");
+
+		mockMvc.perform(post("/pedidos")
+						.header("Authorization", "Bearer " + vtoken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"clienteId\":" + clienteId + ",\"vendedorId\":" + vendedorId
+								+ ",\"items\":[{\"itemId\":" + itemId + ",\"cantidad\":1,\"precioUnitario\":5.00}]}"))
+				.andExpect(status().isCreated());
+
+		// El vendedor cobra a cliente sin pedido asociado (cobro directo).
+		mockMvc.perform(post("/cobranzas")
+						.header("Authorization", "Bearer " + vtoken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"clienteId\":" + clienteId + ",\"monto\":10.00,\"formaPago\":\"EFECTIVO\"}"))
+				.andExpect(status().isCreated());
+	}
+
+	private Sesion loginRepartidor() throws Exception {
+		String login = mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"repartidor@pedidos.com\",\"password\":\"repartidor123\"}"))
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+		return new Sesion(JsonPath.read(login, "$.token"), JsonPath.read(login, "$.usuarioId"));
+	}
+
+	private Integer crearRepartidor(String token) throws Exception {
+		String body = mockMvc.perform(post("/usuarios")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"nombre\":\"Repartidor 2\",\"email\":\"repartidor2@pedidos.com\","
+								+ "\"password\":\"repartidor123\",\"roles\":[\"REPARTIDOR\"]}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		return JsonPath.read(body, "$.id");
+	}
+
+	private record RutaFlujo(Integer zonaId, Integer clienteId, Integer pedidoId) {
+	}
+
+	// Arma un pedido PENDIENTE_ENTREGA listo para asignarse a una ruta.
+	private RutaFlujo prepararPedidoParaRuta(String token) throws Exception {
+		String sufijo = String.valueOf(System.nanoTime());
+
+		String zona = mockMvc.perform(post("/zonas")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"nombre\":\"Zona IT " + sufijo + "\"}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		Integer zonaId = JsonPath.read(zona, "$.id");
+
+		String cliente = mockMvc.perform(post("/clientes")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"razonSocial\":\"Cliente Ruta " + sufijo + "\",\"cuit\":\"3011223344" + (sufijo.length() % 10)
+								+ "\",\"email\":\"ruta" + sufijo + "@x.com\",\"zonaId\":" + zonaId + "}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		Integer clienteId = JsonPath.read(cliente, "$.id");
+
+		String item = mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"RUTA-IT-" + sufijo + "\",\"nombre\":\"Item ruta\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		Integer itemId = JsonPath.read(item, "$.id");
+
+		mockMvc.perform(post("/stock/ingresos")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"itemId\":" + itemId + ",\"cantidad\":100.000,\"motivo\":\"test\"}"))
+				.andExpect(status().isCreated());
+
+		Integer vendedorId = JsonPath.read(mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\":\"admin@pedidos.com\",\"password\":\"admin123\"}"))
+				.andReturn().getResponse().getContentAsString(), "$.usuarioId");
+
+		String pedido = mockMvc.perform(post("/pedidos")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"clienteId\":" + clienteId + ",\"vendedorId\":" + vendedorId
+								+ ",\"items\":[{\"itemId\":" + itemId + ",\"cantidad\":1,\"precioUnitario\":5.00}]}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		Integer pedidoId = JsonPath.read(pedido, "$.id");
+
+		mockMvc.perform(post("/pedidos/" + pedidoId + "/confirmar").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk());
+		mockMvc.perform(post("/pedidos/" + pedidoId + "/despachar").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk());
+
+		return new RutaFlujo(zonaId, clienteId, pedidoId);
+	}
+
+	private Integer crearRuta(String token, RutaFlujo flujo, Integer repartidorId) throws Exception {
+		String ruta = mockMvc.perform(post("/rutas")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"zonaId\":" + flujo.zonaId + ",\"repartidorId\":" + repartidorId
+								+ ",\"fechaJornada\":\"2026-01-01\",\"pedidoIds\":[" + flujo.pedidoId + "]}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		return JsonPath.read(ruta, "$.id");
+	}
 }

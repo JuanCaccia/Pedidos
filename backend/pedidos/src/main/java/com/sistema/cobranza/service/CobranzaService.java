@@ -11,6 +11,8 @@ import com.sistema.common.exception.NotFoundException;
 import com.sistema.pedido.model.EstadoPedido;
 import com.sistema.pedido.model.Pedido;
 import com.sistema.pedido.port.in.ConsultarPedido;
+import com.sistema.ruta.port.in.ConsultarRuta;
+import com.sistema.usuario.model.Rol;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,13 +34,15 @@ public class CobranzaService implements RegistrarCobranza, ConsultarCobranza {
 	private final ClienteGateway clienteGateway;
 	private final VentaGateway ventaGateway;
 	private final ConsultarPedido consultarPedido;
+	private final ConsultarRuta consultarRuta;
 
 	public CobranzaService(CobranzaRepository cobranzaRepository, ClienteGateway clienteGateway,
-			VentaGateway ventaGateway, ConsultarPedido consultarPedido) {
+			VentaGateway ventaGateway, ConsultarPedido consultarPedido, ConsultarRuta consultarRuta) {
 		this.cobranzaRepository = cobranzaRepository;
 		this.clienteGateway = clienteGateway;
 		this.ventaGateway = ventaGateway;
 		this.consultarPedido = consultarPedido;
+		this.consultarRuta = consultarRuta;
 	}
 
 	@Override
@@ -53,8 +57,17 @@ public class CobranzaService implements RegistrarCobranza, ConsultarCobranza {
 		if (command.formaPago() == null) {
 			throw new BusinessException("VALIDATION_ERROR", "La forma de pago es obligatoria");
 		}
+		boolean esRepartidor = command.actor() != null && command.actor().tieneRol(Rol.REPARTIDOR);
+		if (esRepartidor && command.pedidoId() == null) {
+			throw new BusinessException("COBRANZA_REPARTIDOR_SIN_PEDIDO",
+					"El repartidor solo puede registrar una cobranza asociada a un pedido de su ruta");
+		}
 		if (command.pedidoId() != null) {
 			validarPedidoCobrable(command.pedidoId(), command.clienteId());
+			if (esRepartidor && !consultarRuta.pedidoPerteneceARepartidor(command.actor().getId(), command.pedidoId())) {
+				throw new BusinessException("COBRANZA_PEDIDO_NO_EN_RUTA",
+						"El pedido " + command.pedidoId() + " no pertenece a una ruta del repartidor");
+			}
 		}
 		Cobranza cobranza = new Cobranza(command.clienteId(), command.pedidoId(), command.monto(),
 				command.formaPago(), LocalDateTime.now(), command.observaciones());

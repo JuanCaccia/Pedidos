@@ -51,8 +51,9 @@ public class DataSeeder implements CommandLineRunner {
 	}
 
 	public void seed() {
-		seedUsuario("Admin Sistema", "admin@pedidos.com", "admin123",
-				EnumSet.of(Rol.ADMINISTRATIVO, Rol.VENDEDOR, Rol.ENCARGADO_DEPOSITO, Rol.REPARTIDOR));
+		seedUsuario("Admin Sistema", "admin@pedidos.com", "admin123", EnumSet.of(Rol.ADMINISTRATIVO));
+		seedUsuario("Vendedor Demo", "vendedor@pedidos.com", "vendedor123", EnumSet.of(Rol.VENDEDOR));
+		seedUsuario("Depósito Demo", "deposito@pedidos.com", "deposito123", EnumSet.of(Rol.ENCARGADO_DEPOSITO));
 		seedUsuario("Repartidor Demo", "repartidor@pedidos.com", "repartidor123", EnumSet.of(Rol.REPARTIDOR));
 		Long zonaCentro = obtenerZonaId("Zona Centro");
 		obtenerZonaId("Zona Norte");

@@ -373,5 +373,11 @@ class ReporteServiceTest {
 		public List<Ruta> listarPorEstado(EstadoRuta estado) {
 			return rutas.stream().filter(r -> r.getEstado() == estado).toList();
 		}
+
+		@Override
+		public boolean pedidoPerteneceARepartidor(Long repartidorId, Long pedidoId) {
+			return listarPorRepartidor(repartidorId).stream()
+					.anyMatch(r -> r.getEstado() != EstadoRuta.FINALIZADA && r.getPedidoIds().contains(pedidoId));
+		}
 	}
 }

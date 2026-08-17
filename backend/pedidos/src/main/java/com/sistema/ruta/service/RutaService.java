@@ -171,6 +171,12 @@ public class RutaService implements GestionarRuta, ConsultarRuta {
 		return rutaRepository.findByEstado(estado);
 	}
 
+	@Override
+	public boolean pedidoPerteneceARepartidor(Long repartidorId, Long pedidoId) {
+		return rutaRepository.findByRepartidorId(repartidorId).stream()
+				.anyMatch(r -> r.getEstado() != EstadoRuta.FINALIZADA && r.getPedidoIds().contains(pedidoId));
+	}
+
 	private Ruta obtenerO404(Long rutaId) {
 		return rutaRepository.findById(rutaId)
 				.orElseThrow(() -> new NotFoundException("Ruta no encontrada: " + rutaId));

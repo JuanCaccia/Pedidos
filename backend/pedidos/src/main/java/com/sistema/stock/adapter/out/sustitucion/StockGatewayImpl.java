@@ -27,6 +27,12 @@ public class StockGatewayImpl implements StockGateway {
 	}
 
 	@Override
+	@Transactional
+	public void egresar(Long itemId, Long pedidoId, BigDecimal cantidad) {
+		stockService.egresarPorLotes(itemId, pedidoId, cantidad);
+	}
+
+	@Override
 	public BigDecimal consultarPrecioLista(Long itemId) {
 		return stockService.buscarItemPorId(itemId)
 				.map(com.sistema.stock.model.Item::getPrecioLista)

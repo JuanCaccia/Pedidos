@@ -20,8 +20,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -95,6 +97,70 @@ class SustitucionServiceTest {
 	}
 
 	@Test
+	void sustituirEnEnViajePermitido() {
+		stockGateway.precio.put(1L, new BigDecimal("3.00"));
+		stockGateway.precio.put(2L, new BigDecimal("5.00"));
+		SustitucionService service = new SustitucionService(sustitucionRepository, stockGateway,
+				new FakeConsultarPedido(EstadoPedido.EN_VIAJE, List.of(1L), new BigDecimal("1")),
+				registrarCobranza, ajustarInventario);
+
+		Sustitucion sustitucion = service.sustituir(
+				new SustituirCommand(10L, 1L, 2L, new BigDecimal("1"), null, actor));
+
+		assertNotNull(sustitucion.getId());
+		assertEquals(1, stockGateway.egresos.size(), "En EN_VIAJE el original debe egresarse");
+		assertEquals(1, stockGateway.ingresos.size());
+		assertEquals(1, ajustarInventario.ajustes.size());
+		assertEquals(0, new BigDecimal("-2.00").compareTo(sustitucion.getDiferenciaPrecio()));
+	}
+
+	@Test
+	void sustituirEnViajeEgresadoOriginalYRegistraIngreso() {
+		stockGateway.precio.put(1L, new BigDecimal("3.00"));
+		stockGateway.precio.put(2L, new BigDecimal("5.00"));
+		SustitucionService service = new SustitucionService(sustitucionRepository, stockGateway,
+				new FakeConsultarPedido(EstadoPedido.EN_VIAJE, List.of(1L), new BigDecimal("3")),
+				registrarCobranza, ajustarInventario);
+
+		service.sustituir(new SustituirCommand(10L, 1L, 2L, new BigDecimal("2"), null, actor));
+
+		// En EN_VIAJE el original solo estaba reservado: primero se egresa (cantidad a sustituir)
+		// y recién luego se registra el ingreso, para no inflar stock.
+		assertEquals(1, stockGateway.egresos.size());
+		assertEquals(1L, stockGateway.egresos.get(0).itemId);
+		assertEquals(0, new BigDecimal("2").compareTo(stockGateway.egresos.get(0).cantidad));
+		assertEquals(1, stockGateway.ingresos.size());
+		assertEquals(1L, stockGateway.ingresos.get(0).itemId);
+		assertEquals(0, new BigDecimal("2").compareTo(stockGateway.ingresos.get(0).cantidad));
+	}
+
+	@Test
+	void sustituirEnViajeCantidadExcedeReservadaLanza() {
+		stockGateway.precio.put(1L, new BigDecimal("3.00"));
+		stockGateway.precio.put(2L, new BigDecimal("5.00"));
+		SustitucionService service = new SustitucionService(sustitucionRepository, stockGateway,
+				new FakeConsultarPedido(EstadoPedido.EN_VIAJE, List.of(1L), new BigDecimal("1")),
+				registrarCobranza, ajustarInventario);
+
+		assertThrows(BusinessException.class, () -> service.sustituir(
+				new SustituirCommand(10L, 1L, 2L, new BigDecimal("2"), null, actor)));
+		assertEquals(0, stockGateway.egresos.size(), "No debe egresar si la cantidad excede la reserva");
+		assertEquals(0, stockGateway.ingresos.size(), "No debe registrar ingreso si la cantidad excede la reserva");
+	}
+
+	@Test
+	void sustituirEnEntregadoNoEgresadoOriginal() {
+		stockGateway.precio.put(1L, new BigDecimal("3.00"));
+		stockGateway.precio.put(2L, new BigDecimal("5.00"));
+
+		// Pedido ENTREGADO (setup default): el original ya salió, no debe egresarse de nuevo.
+		sustitucionService.sustituir(new SustituirCommand(10L, 1L, 2L, new BigDecimal("2"), null, actor));
+
+		assertEquals(0, stockGateway.egresos.size(), "En ENTREGADO el original no debe egresarse");
+		assertEquals(1, stockGateway.ingresos.size(), "En ENTREGADO solo se registra el ingreso del original");
+	}
+
+	@Test
 	void sustituirMismoItemLanza() {
 		assertThrows(BusinessException.class, () -> sustitucionService.sustituir(
 				new SustituirCommand(10L, 1L, 1L, new BigDecimal("1"), null, actor)));
@@ -113,6 +179,9 @@ class SustitucionServiceTest {
 	private record RegistroIngreso(Long itemId, BigDecimal cantidad, String motivo) {
 	}
 
+	private record RegistroEgreso(Long itemId, BigDecimal cantidad) {
+	}
+
 	private record RegistroAjuste(Long itemId, BigDecimal cantidad, String motivo) {
 	}
 
@@ -120,14 +189,20 @@ class SustitucionServiceTest {
 
 		private final EstadoPedido estado;
 		private final List<Long> itemIds;
+		private final BigDecimal cantidadReservada;
 
 		FakeConsultarPedido(EstadoPedido estado) {
-			this(estado, List.of());
+			this(estado, List.of(), BigDecimal.ZERO);
 		}
 
 		FakeConsultarPedido(EstadoPedido estado, List<Long> itemIds) {
+			this(estado, itemIds, BigDecimal.ZERO);
+		}
+
+		FakeConsultarPedido(EstadoPedido estado, List<Long> itemIds, BigDecimal cantidadReservada) {
 			this.estado = estado;
 			this.itemIds = itemIds;
+			this.cantidadReservada = cantidadReservada;
 		}
 
 		@Override
@@ -137,7 +212,9 @@ class SustitucionServiceTest {
 			pedido.setClienteId(7L);
 			pedido.setEstado(estado);
 			for (Long itemId : itemIds) {
-				pedido.agregarItem(new PedidoItem(itemId, new BigDecimal("1"), new BigDecimal("5.00")));
+				PedidoItem item = new PedidoItem(itemId, new BigDecimal("1"), new BigDecimal("5.00"));
+				item.setCantidadReservada(cantidadReservada);
+				pedido.agregarItem(item);
 			}
 			return Optional.of(pedido);
 		}
@@ -168,12 +245,23 @@ class SustitucionServiceTest {
 		}
 
 		@Override
+		public List<Pedido> listarPorIds(Collection<Long> ids) {
+			return List.of();
+		}
+
+		@Override
 		public Map<EstadoPedido, Long> contadores() {
 			return Map.of();
 		}
 
 		@Override
 		public PageResponse<Pedido> listarPaginado(EstadoPedido estado, Long clienteId, Long vendedorId, int page,
+				int size) {
+			return new PageResponse<>(List.of(), page, size, 0, 0);
+		}
+
+		@Override
+		public PageResponse<Pedido> listarPaginadoPorEstadoYFecha(EstadoPedido estado, LocalDate fechaJornada, int page,
 				int size) {
 			return new PageResponse<>(List.of(), page, size, 0, 0);
 		}
@@ -196,10 +284,16 @@ class SustitucionServiceTest {
 
 		final Map<Long, BigDecimal> precio = new java.util.HashMap<>();
 		final List<RegistroIngreso> ingresos = new ArrayList<>();
+		final List<RegistroEgreso> egresos = new ArrayList<>();
 
 		@Override
 		public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo) {
 			ingresos.add(new RegistroIngreso(itemId, cantidad, motivo));
+		}
+
+		@Override
+		public void egresar(Long itemId, Long pedidoId, BigDecimal cantidad) {
+			egresos.add(new RegistroEgreso(itemId, cantidad));
 		}
 
 		@Override

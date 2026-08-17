@@ -10,6 +10,9 @@ import com.sistema.compra.model.EstadoOrdenCompra;
 import com.sistema.compra.model.OrdenCompra;
 import com.sistema.compra.port.in.ConsultarOrdenCompra;
 import com.sistema.compra.port.in.GestionarOrdenCompra;
+import com.sistema.compra.port.in.ImportarRecepcionCsv;
+import com.sistema.stock.adapter.in.web.dto.ImportacionCsvResponse;
+import com.sistema.stock.model.Lote;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -20,8 +23,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -31,10 +38,13 @@ public class OrdenCompraController {
 
 	private final GestionarOrdenCompra gestionarOrdenCompra;
 	private final ConsultarOrdenCompra consultarOrdenCompra;
+	private final ImportarRecepcionCsv importarRecepcionCsv;
 
-	public OrdenCompraController(GestionarOrdenCompra gestionarOrdenCompra, ConsultarOrdenCompra consultarOrdenCompra) {
+	public OrdenCompraController(GestionarOrdenCompra gestionarOrdenCompra, ConsultarOrdenCompra consultarOrdenCompra,
+			ImportarRecepcionCsv importarRecepcionCsv) {
 		this.gestionarOrdenCompra = gestionarOrdenCompra;
 		this.consultarOrdenCompra = consultarOrdenCompra;
+		this.importarRecepcionCsv = importarRecepcionCsv;
 	}
 
 	@PostMapping
@@ -55,6 +65,14 @@ public class OrdenCompraController {
 				.toList();
 		OrdenCompra orden = gestionarOrdenCompra.registrarRecepcion(new GestionarOrdenCompra.RecepcionCommand(id, lineas));
 		return ResponseEntity.ok(OrdenCompraResponse.from(orden));
+	}
+
+	@PostMapping("/{id}/recepciones/csv")
+	public ResponseEntity<ImportacionCsvResponse> importarRecepcionCsv(@PathVariable Long id,
+			@RequestPart("file") MultipartFile file) throws IOException {
+		String csv = new String(file.getBytes(), StandardCharsets.UTF_8);
+		List<Lote> lotes = importarRecepcionCsv.importar(id, csv);
+		return ResponseEntity.ok(ImportacionCsvResponse.de(lotes));
 	}
 
 	@PostMapping("/{id}/cancelar")

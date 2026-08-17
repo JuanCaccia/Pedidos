@@ -1,6 +1,7 @@
 package com.sistema.stock.adapter.in.web;
 
 import com.sistema.stock.adapter.in.web.dto.AjusteRequest;
+import com.sistema.stock.adapter.in.web.dto.ImportacionCsvResponse;
 import com.sistema.stock.adapter.in.web.dto.IngresoRequest;
 import com.sistema.stock.adapter.in.web.dto.IngresoResponse;
 import com.sistema.stock.adapter.in.web.dto.LoteResponse;
@@ -14,6 +15,7 @@ import com.sistema.stock.port.in.AjustarInventario;
 import com.sistema.stock.port.in.ConsultarStock;
 import com.sistema.stock.port.in.DescartarLote;
 import com.sistema.stock.port.in.GestionarMerma;
+import com.sistema.stock.port.in.ImportarIngresoCsv;
 import com.sistema.stock.port.in.RegistrarIngreso;
 import com.sistema.common.exception.NotFoundException;
 import com.sistema.common.model.PageMapper;
@@ -29,8 +31,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -45,14 +51,17 @@ public class StockController {
 	private final AjustarInventario ajustarInventario;
 	private final ConsultarStock consultarStock;
 	private final DescartarLote descartarLote;
+	private final ImportarIngresoCsv importarIngresoCsv;
 
 	public StockController(RegistrarIngreso registrarIngreso, GestionarMerma gestionarMerma,
-			AjustarInventario ajustarInventario, ConsultarStock consultarStock, DescartarLote descartarLote) {
+			AjustarInventario ajustarInventario, ConsultarStock consultarStock, DescartarLote descartarLote,
+			ImportarIngresoCsv importarIngresoCsv) {
 		this.registrarIngreso = registrarIngreso;
 		this.gestionarMerma = gestionarMerma;
 		this.ajustarInventario = ajustarInventario;
 		this.consultarStock = consultarStock;
 		this.descartarLote = descartarLote;
+		this.importarIngresoCsv = importarIngresoCsv;
 	}
 
 	@PostMapping("/ingresos")
@@ -62,6 +71,16 @@ public class StockController {
 				request.itemId(), request.codigoLote(), request.fechaVencimiento(), request.cantidad(), request.motivo(),
 				request.proveedorId(), request.precioUnitario()));
 		return ResponseEntity.status(HttpStatus.CREATED).body(IngresoResponse.from(lote));
+	}
+
+	@PostMapping("/ingresos/csv")
+	@Operation(summary = "Importa ingresos de stock desde un CSV (sin OC). "
+			+ "Formato por fila: sku, cantidad, precioUnitario, fechaVencimiento, codigoLote")
+	public ResponseEntity<ImportacionCsvResponse> importarIngresosCsv(@RequestPart("file") MultipartFile file,
+			@RequestParam(required = false) Long proveedorId) throws IOException {
+		String csv = new String(file.getBytes(), StandardCharsets.UTF_8);
+		List<Lote> lotes = importarIngresoCsv.importar(csv, proveedorId);
+		return ResponseEntity.ok(ImportacionCsvResponse.de(lotes));
 	}
 
 	@PostMapping("/mermas")

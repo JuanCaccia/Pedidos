@@ -5,6 +5,7 @@ import com.sistema.common.exception.NotFoundException;
 import com.sistema.common.model.PageResponse;
 import com.sistema.compra.model.Proveedor;
 import com.sistema.compra.model.ProveedorItem;
+import com.sistema.stock.model.Lote;
 import com.sistema.compra.port.in.GestionarProveedor;
 import com.sistema.compra.port.out.ProveedorRepository;
 import com.sistema.compra.port.out.StockGateway;
@@ -278,6 +279,12 @@ class ProveedorServiceTest {
 		public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId,
 				BigDecimal precioUnitario) {
 			// no-op en este test
+		}
+
+		@Override
+		public Lote registrarIngresoConLote(Long itemId, String codigoLote, java.time.LocalDate fechaVencimiento,
+				BigDecimal cantidad, String motivo, Long proveedorId, BigDecimal precioUnitario) {
+			return new Lote(itemId, codigoLote, java.time.LocalDate.now(), fechaVencimiento, cantidad);
 		}
 	}
 }

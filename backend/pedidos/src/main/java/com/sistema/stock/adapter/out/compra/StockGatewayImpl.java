@@ -1,11 +1,13 @@
 package com.sistema.stock.adapter.out.compra;
 
 import com.sistema.compra.port.out.StockGateway;
+import com.sistema.stock.model.Lote;
 import com.sistema.stock.port.in.RegistrarIngreso;
 import com.sistema.stock.service.StockService;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Component("stockGatewayCompra")
 public class StockGatewayImpl implements StockGateway {
@@ -33,5 +35,12 @@ public class StockGatewayImpl implements StockGateway {
 			BigDecimal precioUnitario) {
 		registrarIngreso.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
 				itemId, codigoLote, null, cantidad, motivo, proveedorId, precioUnitario));
+	}
+
+	@Override
+	public Lote registrarIngresoConLote(Long itemId, String codigoLote, LocalDate fechaVencimiento,
+			BigDecimal cantidad, String motivo, Long proveedorId, BigDecimal precioUnitario) {
+		return registrarIngreso.crearIngreso(new RegistrarIngreso.CrearIngresoCommand(
+				itemId, codigoLote, fechaVencimiento, cantidad, motivo, proveedorId, precioUnitario));
 	}
 }

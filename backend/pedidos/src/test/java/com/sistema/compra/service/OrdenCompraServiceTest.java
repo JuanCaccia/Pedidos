@@ -8,6 +8,7 @@ import com.sistema.compra.model.OrdenCompra;
 import com.sistema.compra.model.OrdenCompraLinea;
 import com.sistema.compra.model.Proveedor;
 import com.sistema.compra.model.ProveedorItem;
+import com.sistema.stock.model.Lote;
 import com.sistema.compra.port.in.GestionarOrdenCompra;
 import com.sistema.compra.port.out.OrdenCompraRepository;
 import com.sistema.compra.port.out.ProveedorRepository;
@@ -387,6 +388,13 @@ class OrdenCompraServiceTest {
 		public void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId,
 				BigDecimal precioUnitario) {
 			ingresos.add(itemId + ":" + cantidad + ":" + proveedorId + ":" + precioUnitario);
+		}
+
+		@Override
+		public Lote registrarIngresoConLote(Long itemId, String codigoLote, java.time.LocalDate fechaVencimiento,
+				BigDecimal cantidad, String motivo, Long proveedorId, BigDecimal precioUnitario) {
+			ingresos.add(itemId + ":" + cantidad + ":" + proveedorId + ":" + precioUnitario);
+			return new Lote(itemId, codigoLote, java.time.LocalDate.now(), fechaVencimiento, cantidad);
 		}
 	}
 }

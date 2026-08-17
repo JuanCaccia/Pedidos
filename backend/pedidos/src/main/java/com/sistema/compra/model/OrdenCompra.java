@@ -32,6 +32,10 @@ public class OrdenCompra {
 		return this.lineas.stream().filter(l -> l.getId().equals(lineaId)).findFirst();
 	}
 
+	public Optional<OrdenCompraLinea> lineaPorItemId(Long itemId) {
+		return this.lineas.stream().filter(l -> l.getItemId().equals(itemId)).findFirst();
+	}
+
 	public Long getId() {
 		return id;
 	}

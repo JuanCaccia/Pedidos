@@ -6,13 +6,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -53,7 +58,7 @@ class PedidosIntegrationTest {
 		String token = sesion.token;
 		Integer clienteId = obtenerClienteId(token, "Cliente Demo");
 		Integer vendedorId = sesion.usuarioId;
-		Integer itemId = obtenerItemId(token, "HAR");
+		Integer itemId = obtenerItemId(token, "HAR-000");
 
 		String pedido = mockMvc.perform(post("/pedidos")
 						.header("Authorization", "Bearer " + token)
@@ -76,7 +81,7 @@ class PedidosIntegrationTest {
 		Sesion sesion = loginSesion();
 		String token = sesion.token;
 		Integer vendedorId = sesion.usuarioId;
-		Integer itemId = obtenerItemId(token, "HAR");
+		Integer itemId = obtenerItemId(token, "HAR-000");
 
 		mockMvc.perform(post("/pedidos")
 						.header("Authorization", "Bearer " + token)
@@ -202,6 +207,94 @@ class PedidosIntegrationTest {
 				.andExpect(status().isForbidden());
 		mockMvc.perform(get("/reportes/stock").header("Authorization", "Bearer " + repartidorToken))
 				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void ingresoCsvImportaLotesConPrecio() throws Exception {
+		String token = login();
+		String item = mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"INGCSV-IT\",\"nombre\":\"Ingreso CSV\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		Integer itemId = JsonPath.read(item, "$.id");
+
+		byte[] csv = "sku,cantidad,precioUnitario\nINGCSV-IT,50,12.50\n".getBytes(StandardCharsets.UTF_8);
+		mockMvc.perform(multipart("/stock/ingresos/csv")
+						.file(new MockMultipartFile("file", "ingreso.csv", "text/csv", csv))
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.lotesCreados[0].itemId").value(itemId))
+				.andExpect(jsonPath("$.lotesCreados[0].cantidad").value(50.0))
+				.andExpect(jsonPath("$.lotesCreados[0].precioUnitario").value(12.50))
+				.andExpect(jsonPath("$.errores").isEmpty());
+	}
+
+	@Test
+	void ingresoCsvConSkuInexistenteDevuelve400Agregado() throws Exception {
+		String token = login();
+		String item = mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"CSVOK-IT\",\"nombre\":\"Csv ok\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		Integer itemId = JsonPath.read(item, "$.id");
+
+		byte[] csv = "sku,cantidad,precioUnitario\nCSVOK-IT,10,5\nCSVNOK,1,1\n".getBytes(StandardCharsets.UTF_8);
+		mockMvc.perform(multipart("/stock/ingresos/csv")
+						.file(new MockMultipartFile("file", "mixto.csv", "text/csv", csv))
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors[0]", org.hamcrest.Matchers.containsString("fila 2")))
+				.andExpect(jsonPath("$.errors[0]", org.hamcrest.Matchers.containsString("CSVNOK")));
+	}
+
+	@Test
+	void recepcionCsvDeOcCreaLotesConPrecio() throws Exception {
+		String token = login();
+		String item = mockMvc.perform(post("/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"sku\":\"RCCSV-IT\",\"nombre\":\"Recepción CSV\",\"unidadMedida\":\"UN\"}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		Integer itemId = JsonPath.read(item, "$.id");
+
+		String proveedor = mockMvc.perform(post("/proveedores")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"razonSocial\":\"Proveedor CSV\",\"cuit\":\"30112233447\"}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		Integer proveedorId = JsonPath.read(proveedor, "$.id");
+
+		mockMvc.perform(put("/proveedores/" + proveedorId + "/items")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"itemIds\":[" + itemId + "]}"))
+				.andExpect(status().isOk());
+
+		String oc = mockMvc.perform(post("/ordenes-compra")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"proveedorId\":" + proveedorId + ",\"lineas\":[{\"itemId\":" + itemId + ",\"cantidad\":100}]}"))
+				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		Integer ocId = JsonPath.read(oc, "$.id");
+
+		byte[] csv = "sku,cantidad,precioUnitario\nRCCSV-IT,40,12.50\n".getBytes(StandardCharsets.UTF_8);
+		mockMvc.perform(multipart("/ordenes-compra/" + ocId + "/recepciones/csv")
+						.file(new MockMultipartFile("file", "recepcion.csv", "text/csv", csv))
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.lotesCreados[0].itemId").value(itemId))
+				.andExpect(jsonPath("$.lotesCreados[0].cantidad").value(40.0))
+				.andExpect(jsonPath("$.lotesCreados[0].precioUnitario").value(12.50))
+				.andExpect(jsonPath("$.errores").isEmpty());
+
+		// La OC queda recibida parcialmente: la línea no cubierta por el CSV no se recibe.
+		mockMvc.perform(get("/ordenes-compra/" + ocId).header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.estado").value("RECIBIDA_PARCIAL"))
+				.andExpect(jsonPath("$.lineas[0].cantidadRecibida").value(40.0))
+				.andExpect(jsonPath("$.lineas[0].restante").value(60.0));
 	}
 
 	private String login() throws Exception {

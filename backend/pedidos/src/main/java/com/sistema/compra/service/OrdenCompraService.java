@@ -11,10 +11,12 @@ import com.sistema.compra.port.in.GestionarOrdenCompra;
 import com.sistema.compra.port.out.OrdenCompraRepository;
 import com.sistema.compra.port.out.ProveedorRepository;
 import com.sistema.compra.port.out.StockGateway;
+import com.sistema.stock.model.Lote;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -102,8 +104,48 @@ public class OrdenCompraService implements GestionarOrdenCompra, ConsultarOrdenC
 
 	@Override
 	@Transactional
-	public void cancelarOrdenCompra(Long ordenId) {
-		OrdenCompra orden = obtenerO404(ordenId);
+	public List<Lote> registrarRecepcionCsv(RecepcionCsvCommand command) {
+		OrdenCompra orden = obtenerO404(command.ordenId());
+		if (orden.getEstado() != EstadoOrdenCompra.PENDIENTE
+				&& orden.getEstado() != EstadoOrdenCompra.RECIBIDA_PARCIAL) {
+			throw new BusinessException("OC_ESTADO_INVALIDO",
+					"Solo se puede recibir una OC en PENDIENTE o RECIBIDA_PARCIAL");
+		}
+		List<Lote> lotes = new ArrayList<>();
+		for (RecepcionCsvLineaCommand rl : command.lineas()) {
+			OrdenCompraLinea linea = orden.lineaPorItemId(rl.itemId())
+					.orElseThrow(() -> new BusinessException("ITEM_NO_EN_OC",
+							"El item " + rl.itemId() + " no está en la orden de compra"));
+			if (rl.cantidadRecibida() == null || rl.cantidadRecibida().signum() <= 0) {
+				throw new BusinessException("VALIDATION_ERROR", "La cantidad recibida debe ser mayor a cero");
+			}
+			if (rl.precioUnitario() == null || rl.precioUnitario().signum() <= 0) {
+				throw new BusinessException("VALIDATION_ERROR", "El precio unitario recibido debe ser mayor a cero");
+			}
+			BigDecimal restante = linea.restante();
+			if (rl.cantidadRecibida().compareTo(restante) > 0) {
+				throw new BusinessException("VALIDATION_ERROR", "No se puede recibir más que el restante (" + restante + ")");
+			}
+			linea.recibir(rl.cantidadRecibida());
+			String codigoLote = rl.codigoLote() != null && !rl.codigoLote().isBlank()
+					? rl.codigoLote()
+					: orden.getNumero() + "-" + (System.nanoTime() % 100000);
+			Lote lote = stockGateway.registrarIngresoConLote(linea.getItemId(), codigoLote, rl.fechaVencimiento(),
+					rl.cantidadRecibida(), "Recepción de OC " + orden.getNumero(),
+					orden.getProveedorId(), rl.precioUnitario());
+			proveedorRepository.vincularItem(orden.getProveedorId(), linea.getItemId());
+			lotes.add(lote);
+		}
+		boolean completa = orden.getLineas().stream()
+				.allMatch(l -> l.getCantidadRecibida().compareTo(l.getCantidadPedida()) >= 0);
+		orden.setEstado(completa ? EstadoOrdenCompra.RECIBIDA : EstadoOrdenCompra.RECIBIDA_PARCIAL);
+		ordenCompraRepository.save(orden);
+		return lotes;
+	}
+
+	@Override
+	@Transactional
+	public void cancelarOrdenCompra(Long ordenId) {		OrdenCompra orden = obtenerO404(ordenId);
 		if (orden.getEstado() != EstadoOrdenCompra.PENDIENTE
 				&& orden.getEstado() != EstadoOrdenCompra.RECIBIDA_PARCIAL) {
 			throw new BusinessException("OC_ESTADO_INVALIDO", "Solo se puede cancelar una OC en PENDIENTE o RECIBIDA_PARCIAL");

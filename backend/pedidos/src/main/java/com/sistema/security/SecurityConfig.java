@@ -47,7 +47,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/pedidos/*/marcar-faltante").hasAnyRole("ENCARGADO_DEPOSITO", "ADMINISTRATIVO")
 						.requestMatchers(HttpMethod.GET, "/notificaciones/**").hasAnyRole("ADMINISTRATIVO", "ENCARGADO_DEPOSITO")
 						.requestMatchers(HttpMethod.POST, "/notificaciones/*/leer").hasAnyRole("ADMINISTRATIVO", "ENCARGADO_DEPOSITO")
-						.requestMatchers(HttpMethod.POST, "/stock/ingresos", "/stock/mermas", "/stock/lotes/*/descartar").hasAnyRole("ENCARGADO_DEPOSITO", "ADMINISTRATIVO")
+						.requestMatchers(HttpMethod.POST, "/stock/ingresos", "/stock/ingresos/csv", "/stock/mermas", "/stock/lotes/*/descartar").hasAnyRole("ENCARGADO_DEPOSITO", "ADMINISTRATIVO")
 						.requestMatchers(HttpMethod.POST, "/stock/ajustes").hasAnyRole("ENCARGADO_DEPOSITO", "ADMINISTRATIVO")
 						.requestMatchers("/rutas/**").hasAnyRole("REPARTIDOR", "ADMINISTRATIVO")
 						.requestMatchers("/reportes/stock", "/reportes/stock/exportar.csv").hasAnyRole("ENCARGADO_DEPOSITO", "ADMINISTRATIVO")

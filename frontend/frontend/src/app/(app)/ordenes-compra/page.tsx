@@ -1,13 +1,14 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { apiGet, apiPost } from "@/lib/api";
-import type { Categoria, EstadoOrdenCompra, Item, OrdenCompra, PageResponse, Proveedor } from "@/lib/types";
+import { apiGet, apiPost, apiUploadCsv } from "@/lib/api";
+import type { Categoria, EstadoOrdenCompra, ImportacionCsvResponse, Item, OrdenCompra, PageResponse, Proveedor } from "@/lib/types";
 import { formatDate, formatNumber } from "@/lib/format";
 import Loading from "@/components/Loading";
 import ErrorBox from "@/components/ErrorBox";
 import Button from "@/components/Button";
 import Drawer from "@/components/Drawer";
+import Modal from "@/components/Modal";
 import ConfirmacionFrictionada from "@/components/ConfirmacionFrictionada";
 import Combobox from "@/components/Combobox";
 import { IconClose } from "@/components/icons";
@@ -52,6 +53,7 @@ export default function OrdenesCompraPage() {
 
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [recepcionId, setRecepcionId] = useState<number | null>(null);
+  const [csvRecepcionId, setCsvRecepcionId] = useState<number | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [cancelarOrden, setCancelarOrden] = useState<OrdenCompra | null>(null);
@@ -166,6 +168,7 @@ export default function OrdenesCompraPage() {
                     onToggle={() => setExpandedId(expandedId === orden.id ? null : orden.id)}
                     recepcionAbierta={recepcionId === orden.id}
                     onToggleRecepcion={() => setRecepcionId(recepcionId === orden.id ? null : orden.id)}
+                    onImportarCsv={() => setCsvRecepcionId(orden.id)}
                     onCancelar={() => setCancelarOrden(orden)}
                     onRecepcionSuccess={loadOrdenes}
                   />
@@ -196,6 +199,17 @@ export default function OrdenesCompraPage() {
           }}
         />
       )}
+
+      {csvRecepcionId != null && (
+        <RecepcionCsvModal
+          orden={ordenes.find((o) => o.id === csvRecepcionId) ?? null}
+          onClose={() => setCsvRecepcionId(null)}
+          onSuccess={async () => {
+            setCsvRecepcionId(null);
+            await loadOrdenes();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -220,6 +234,7 @@ function OrdenRow({
   onToggle,
   recepcionAbierta,
   onToggleRecepcion,
+  onImportarCsv,
   onCancelar,
   onRecepcionSuccess,
 }: {
@@ -230,6 +245,7 @@ function OrdenRow({
   onToggle: () => void;
   recepcionAbierta: boolean;
   onToggleRecepcion: () => void;
+  onImportarCsv: () => void;
   onCancelar: () => void;
   onRecepcionSuccess: () => Promise<void>;
 }) {
@@ -258,6 +274,11 @@ function OrdenRow({
             {puedeRecibir && (
               <Button variant="secondary" onClick={onToggleRecepcion}>
                 {recepcionAbierta ? "Cerrar recepción" : "Registrar recepción"}
+              </Button>
+            )}
+            {puedeRecibir && (
+              <Button variant="secondary" onClick={onImportarCsv}>
+                Importar recepción (CSV)
               </Button>
             )}
             {puedeRecibir && (
@@ -431,6 +452,93 @@ function RecepcionPanel({
         </Button>
       </div>
     </div>
+  );
+}
+
+function RecepcionCsvModal({
+  orden,
+  onClose,
+  onSuccess,
+}: {
+  orden: OrdenCompra | null;
+  onClose: () => void;
+  onSuccess: () => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ImportacionCsvResponse | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit() {
+    if (saving) return;
+    if (!file) {
+      setError("Seleccioná un archivo CSV.");
+      return;
+    }
+    if (!orden) return;
+    setError(null);
+    setResult(null);
+    setSaving(true);
+    try {
+      const res = await apiUploadCsv<ImportacionCsvResponse>(
+        `/api/ordenes-compra/${orden.id}/recepciones/csv`,
+        file
+      );
+      setResult(res);
+      if (res.errores.length === 0) {
+        await onSuccess();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={orden ? `Importar recepción (CSV) · ${orden.numero}` : "Importar recepción (CSV)"} onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          Cada fila del CSV debe tener: <code className="font-mono">sku, cantidad, precioUnitario, fechaVencimiento, codigoLote</code>.
+          El separador puede ser <code className="font-mono">;</code> o <code className="font-mono">,</code>. Solo se reciben
+          los sku que figuran en la orden; las líneas que no aparecen quedan pendientes.
+        </p>
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null);
+            setResult(null);
+            setError(null);
+          }}
+          className={INPUT_CLASS}
+        />
+        {error && <ErrorBox message={error} />}
+        {result && result.errores.length === 0 && (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+            Se importaron {result.lotesCreados.length} lote{result.lotesCreados.length === 1 ? "" : "s"} correctamente.
+          </div>
+        )}
+        {result && result.errores.length > 0 && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/40">
+            <p className="mb-1 text-sm font-medium text-red-800 dark:text-red-300">Errores por fila:</p>
+            <ul className="list-inside list-disc space-y-0.5 text-sm text-red-700 dark:text-red-400">
+              {result.errores.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cerrar
+          </Button>
+          <Button onClick={handleSubmit} disabled={saving}>
+            {saving ? "Importando..." : "Importar CSV"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

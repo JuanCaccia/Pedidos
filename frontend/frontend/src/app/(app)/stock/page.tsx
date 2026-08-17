@@ -2,8 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { apiGet, apiPost } from "@/lib/api";
-import type { Item, Lote, MovimientoStock, PageResponse, ReporteStockItem } from "@/lib/types";
+import { apiGet, apiPost, apiUploadCsv } from "@/lib/api";
+import type { ImportacionCsvResponse, Item, Lote, MovimientoStock, PageResponse, ReporteStockItem } from "@/lib/types";
 import { formatDate, formatDateTime, formatMoney, formatNumber } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import Loading from "@/components/Loading";
@@ -64,6 +64,7 @@ function StockPageInner() {
   const [items, setItems] = useState<Item[]>([]);
 
   const [modal, setModal] = useState<StockModal>(null);
+  const [csvIngresoOpen, setCsvIngresoOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -235,6 +236,9 @@ function StockPageInner() {
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => openModal("ingreso")}>
               Registrar ingreso
+            </Button>
+            <Button onClick={() => setCsvIngresoOpen(true)}>
+              Importar ingreso (CSV)
             </Button>
             <Button onClick={() => openModal("merma")}>
               Registrar merma
@@ -562,7 +566,115 @@ function StockPageInner() {
           onCreated={handleCreated}
         />
       )}
+
+      {csvIngresoOpen && (
+        <IngresoCsvModal
+          onClose={() => setCsvIngresoOpen(false)}
+          onSuccess={async (msg) => {
+            setCsvIngresoOpen(false);
+            showToast(msg);
+            await Promise.all([loadLotes(), loadStock()]);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function IngresoCsvModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: (message: string) => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [proveedorId, setProveedorId] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ImportacionCsvResponse | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit() {
+    if (saving) return;
+    if (!file) {
+      setError("Seleccioná un archivo CSV.");
+      return;
+    }
+    setError(null);
+    setResult(null);
+    setSaving(true);
+    try {
+      const qp = proveedorId.trim() ? `?proveedorId=${encodeURIComponent(proveedorId.trim())}` : "";
+      const res = await apiUploadCsv<ImportacionCsvResponse>(`/api/stock/ingresos/csv${qp}`, file);
+      setResult(res);
+      if (res.errores.length === 0) {
+        await onSuccess(`Se importaron ${res.lotesCreados.length} lote${res.lotesCreados.length === 1 ? "" : "s"} correctamente.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title="Importar ingreso (CSV)" onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          Cada fila del CSV debe tener: <code className="font-mono">sku, cantidad, precioUnitario, fechaVencimiento, codigoLote</code>.
+          El separador puede ser <code className="font-mono">;</code> o <code className="font-mono">,</code>. Cada fila genera
+          un lote con su movimiento INGRESO.
+        </p>
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null);
+            setResult(null);
+            setError(null);
+          }}
+          className={INPUT_CLASS}
+        />
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="ingreso-csv-proveedor" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            Proveedor ID (opcional)
+          </label>
+          <input
+            id="ingreso-csv-proveedor"
+            type="number"
+            min="1"
+            value={proveedorId}
+            onChange={(e) => setProveedorId(e.target.value)}
+            className={INPUT_CLASS}
+            placeholder="Id del proveedor para vincular al lote"
+          />
+        </div>
+        {error && <ErrorBox message={error} />}
+        {result && result.errores.length === 0 && (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+            Se importaron {result.lotesCreados.length} lote{result.lotesCreados.length === 1 ? "" : "s"} correctamente.
+          </div>
+        )}
+        {result && result.errores.length > 0 && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/40">
+            <p className="mb-1 text-sm font-medium text-red-800 dark:text-red-300">Errores por fila:</p>
+            <ul className="list-inside list-disc space-y-0.5 text-sm text-red-700 dark:text-red-400">
+              {result.errores.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cerrar
+          </Button>
+          <Button onClick={handleSubmit} disabled={saving}>
+            {saving ? "Importando..." : "Importar CSV"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

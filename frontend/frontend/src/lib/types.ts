@@ -218,6 +218,20 @@ export interface RecepcionRequest {
   lineas: { lineaId: number; cantidadRecibida: number; precioUnitario: number }[];
 }
 
+export interface LoteImportado {
+  loteId: number;
+  itemId: number;
+  codigoLote: string;
+  cantidad: number;
+  precioUnitario: number | null;
+  fechaVencimiento: string | null;
+}
+
+export interface ImportacionCsvResponse {
+  lotesCreados: LoteImportado[];
+  errores: string[];
+}
+
 export interface ReporteStockItem {
   itemId: number;
   sku: string;

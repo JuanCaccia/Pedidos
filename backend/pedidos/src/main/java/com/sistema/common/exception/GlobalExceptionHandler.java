@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestControllerAdvice
@@ -59,6 +60,11 @@ public class GlobalExceptionHandler {
 				.forEach(fe -> fieldErrors.putIfAbsent(fe.getField(), fe.getDefaultMessage()));
 		ApiError error = ApiError.of(HttpStatus.BAD_REQUEST.value(), "VALIDATION_ERROR", "Solicitud inválida", fieldErrors);
 		return ResponseEntity.badRequest().body(error);
+	}
+
+	@ExceptionHandler(CsvImportException.class)
+	public ResponseEntity<Map<String, List<String>>> handleCsvImport(CsvImportException ex) {
+		return ResponseEntity.badRequest().body(Map.of("errors", ex.getErrores()));
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)

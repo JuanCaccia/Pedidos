@@ -84,3 +84,45 @@ export async function apiDownloadText(path: string): Promise<string> {
   if (!res.ok) throw new Error("Error al exportar (" + res.status + ")");
   return res.text();
 }
+
+export async function apiUploadCsv<T>(path: string, file: File): Promise<T> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const headers = new Headers();
+  headers.set("Accept", "application/json");
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(path, { method: "POST", headers, body: formData });
+  } catch {
+    throw new Error("No se pudo conectar con el servidor. Verificá que el backend esté corriendo.");
+  }
+
+  if (response.status === 401) {
+    clearSession();
+    if (typeof window !== "undefined") window.location.href = "/login";
+    throw new Error("Sesión expirada. Iniciá sesión nuevamente.");
+  }
+
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    // Sin cuerpo JSON
+  }
+
+  if (!response.ok) {
+    const errors = (body as { errors?: string[] } | null)?.errors;
+    if (errors && errors.length > 0) {
+      throw new Error(errors.join("\n"));
+    }
+    throw new Error("Error inesperado (" + response.status + ")");
+  }
+
+  return body as T;
+}

@@ -1,6 +1,9 @@
 package com.sistema.compra.port.out;
 
+import com.sistema.stock.model.Lote;
+
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public interface StockGateway {
 
@@ -10,4 +13,7 @@ public interface StockGateway {
 
 	void registrarIngreso(Long itemId, String codigoLote, BigDecimal cantidad, String motivo, Long proveedorId,
 			BigDecimal precioUnitario);
+
+	Lote registrarIngresoConLote(Long itemId, String codigoLote, LocalDate fechaVencimiento, BigDecimal cantidad,
+			String motivo, Long proveedorId, BigDecimal precioUnitario);
 }

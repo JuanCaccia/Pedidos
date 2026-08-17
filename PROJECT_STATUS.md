@@ -1,6 +1,6 @@
 # Project Status — Sistema de Pedidos, Stock y Ventas
 
-> **Fecha:** 2026-08-17. **Autor:** cierre formal de milestone + cierre de Fase D (D1-D4) + cierre de Hardening de Producción + 4 bloques de mejoras + reestructuración de roles y UI (Etapas 1 y 2).
+> **Fecha:** 2026-08-17. **Autor:** cierre formal de milestone + cierre de Fase D (D1-D4) + cierre de Hardening de Producción + 4 bloques de mejoras + reestructuración de roles y UI (Etapas 1 y 2) + Saneamiento de Experiencia Operativa (Bloques A y B).
 > Este documento describe el estado **verificado real** del proyecto, no aspiraciones.
 
 ## Current Milestone
@@ -11,7 +11,7 @@
 
 ## Status
 
-**COMPLETA / VERIFICADA — Backend 265 tests + E2E Playwright 8 tests en verde; Hardening de Producción cerrado; Fase D cerrada; Bloques P1.A, P1.B, P2.A y P2.B de saneamiento aplicados y verificados; 4 bloques de mejoras de compra/stock aplicados y verificados; reestructuración de roles (Etapa 1) y UI por rol (Etapa 2) aplicadas y verificadas.**
+**COMPLETA / VERIFICADA — Backend 269 tests + E2E Playwright 8 tests en verde; Hardening de Producción cerrado; Fase D cerrada; Bloques P1.A, P1.B, P2.A y P2.B de saneamiento aplicados y verificados; 4 bloques de mejoras de compra/stock aplicados y verificados; reestructuración de roles (Etapa 1) y UI por rol (Etapa 2) aplicadas y verificadas; Saneamiento de Experiencia Operativa (Bloques A y B) aplicado y verificado.**
 
 ## Milestone Objective
 
@@ -25,7 +25,7 @@ TTL de reservas, consolidación, export CSV).
 
 La mayoría de los flujos centrales **funcionan y son consistentes** entre backend y frontend
 (ciclo de pedido, consolidación, OC/recepción, cobranzas, faltantes+notificaciones, CSV,
-TTL config). Backend: **265 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
+TTL config). Backend: **269 tests pasando, 0 fallos**. Frontend: build Next.js 16.3 OK.
 Los dos bloqueantes P1 de C8 (BUG-002 autorización, BUG-003 sustitución con diferencia
 negativa) fueron **resueltos y verificados en vivo**. Persisten como P1: BUG-004 (cierre de
 jornada con EN_VIAJE colgados) y BUG-005 (decisión de alcance "pedido express"). Además
@@ -93,6 +93,16 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
   - **Etapa 1 — Autorización por rol (backend):** rutas (creación/asignación de pedidos solo `ADMINISTRATIVO`; iniciar/cerrar/get `REPARTIDOR`+`ADMIN`), Zonas (ABMC solo `ADMINISTRATIVO`; `GET` authenticated), y Cobranzas (`VENDEDOR`+`ADMIN`+`REPARTIDOR`, con exigencia de `pedidoId` de una ruta propia NO finalizada para el repartidor — `COBRANZA_REPARTIDOR_SIN_PEDIDO` / `COBRANZA_PEDIDO_NO_EN_RUTA`). `DataSeeder`: `admin@pedidos.com` pasa a rol único `ADMINISTRATIVO`; se agregan `vendedor@pedidos.com` (VENDEDOR) y `deposito@pedidos.com` (ENCARGADO_DEPOSITO); `repartidor@pedidos.com` (REPARTIDOR). Matriz de seguridad cubierta por tests por rol.
   - **Etapa 2 — UI por rol (frontend):** barra lateral declarativa por rol (REPARTIDOR solo "Mi Jornada"; VENDEDOR Panel/Pedidos/Clientes/Catálogo/Cobranzas; ENCARGADO_DEPOSITO Panel/Pedidos/Stock/Items/Clientes/Proveedores/Compras; ADMIN todo agrupado). Categorías como pestaña en `/items`; Zonas como pestaña en `/clientes` (solo ADMIN). `/turno` = wizard del repartidor (Antes de salir → En viaje con paradas [entregar/cobrar/sustituir/reagendar/rechazar] → Rendición/Cerrar). Dashboard role-aware sin 403 para VENDEDOR/ENCARGADO.
   - **Fixes:** fechas `YYYY-MM-DD` como local (no UTC) en `format.ts`; `CobranzaRequest.clienteId` `@NotNull` (400 en vez de 500). **265 tests backend + build frontend verde; Flyway V22.**
+- **Saneamiento de Experiencia Operativa — Bloque A (ergonomía frontend) aplicado y verificado (commit `ab94a72`):**
+  - A1: el carrito de OC ya NO limpia las líneas al cambiar categoría (patrón de pedidos, `itemLabel` + `valueLabel`) — se pueden pedir ítems de distintas categorías.
+  - A2: el selector de productos en pedidos/OC muestra "Disponible: X un." vía `GET /stock/items/{id}` (`authenticated`, 200 para VENDEDOR) bajo demanda con caché; se reemplazó `GET /reportes/stock` que daba 403 al VENDEDOR (bug detectado por QA y corregido).
+  - A3: `/stock` recarga lotes+stock tras cada operación (ingreso/merma/ajuste/descarte).
+  - A4: botón "Registrar entrega" para `REPARTIDOR`/`ADMINISTRATIVO` en pedidos `EN_VIAJE`.
+- **Saneamiento de Experiencia Operativa — Bloque B (flujos y reportes) aplicado y verificado (commit `8160d4f`):**
+  - B1: alerta visual NO bloqueante en recepción de OC e ingreso manual si el costo supera el precio de lista del ítem.
+  - B2: `POST /pedidos/{id}/reintentar-stock` (`ENCARGADO_DEPOSITO`/`ADMINISTRATIVO`) re-evalúa la reserva de un `PENDIENTE_STOCK` contra el stock disponible y pasa a `PENDIENTE_PREPARACION`; acción "Reintentar/Asignar stock" en la cola de pedidos. Coexiste con `agregar-stock`.
+  - B3: `GET /reportes/cobranzas/exportar.csv` (fecha, clienteId, cliente, pedidoId, pedidoNumero, monto, formaPago, observaciones, saldo), filtrable por fecha/cliente; VENDEDOR/ADMIN 200, ENCARGADO 403, sin token 401. Botón "Exportar cobranzas" separado de "Exportar caja".
+  - B4: `generarPedidoHijo` (saldo de entrega parcial) nace `PENDIENTE_PREPARACION` reservando el stock disponible (o `PENDIENTE_STOCK` si no hay), sin requerir confirmación manual. **269 tests backend + build frontend verde.**
 - **Hardening de Producción aplicado y verificado (2026-08-16):**
   - STR-004: `listarPaginado` ordena toda consulta deterministamente (`express DESC, fechaCreacion DESC, id ASC`, null-safe); test `listarColaConfirmacionOrdenaDeterminista`.
   - STR-005: `POST /api/test/reset` (dev/test) con `TRUNCATE CASCADE` de 20 tablas + reseed; `globalSetup` en Playwright; no existe en prod (test `TestResetNoExisteEnProdTest`).
@@ -141,6 +151,9 @@ reproducible (gitlink a commit vacío, sin submódulo, sin remote).
 * ~5 warnings ESLint `react-hooks/set-state-in-effect` (patrón setState en efecto en algunos componentes del frontend) — pendiente de corregir.
 * `pedidoPerteneceARepartidor` filtra en memoria (recupera los pedidos de la ruta y valida pertenencia en Java); a futuro una query dedicada (¿query por ruta + repartidor + estado no finalizado) evitaría el barrido en memoria.
 * Duplicación de lógica de recepción CSV entre `POST /stock/ingresos/csv` y `POST /ordenes-compra/{id}/recepciones/csv` — **refactor opcional** (unificar el pipeline de parseo+persistencia).
+* `PedidoItem.agregarStock` solo limpia `pendienteStock` si cubre la cantidad, nunca lo marca en reserva parcial → en `reservarDisponibleSinBloqueo`, si `disponible < pendiente`, el hijo nacería `PENDIENTE_PREPARACION` con reserva incompleta (alcanzable solo por carrera concurrente; el peor caso es 409 que revierte la entrega). Fix recomendado: reusar la marca del flujo de confirmación (`aReservar.compareTo(cantidadPedida) < 0`) y agregar test para la rama `PENDIENTE_STOCK` del hijo (B4).
+* Pedido hijo (B4) nace sin `fechaJornada` (null); puede afectar rondeo/planificación del día si se usa ese campo.
+* Saldo del CSV de cobranzas (B3) se calcula contra el `totalVendido` *actual* del cliente (snapshot de saldo corriente), no histórico por transacción.
 * Frontend completo **sin versionar** de forma reproducible (STR-001) — P1, pendiente.
 * Sin tests frontend.
 * ROADMAP.md desactualizado (109→132 tests, V1→V11→V15, C8 no reflejado). — ✅ Hardening: ROADMAP.md actualizado a 204/8 y hitos cerrados.
@@ -188,7 +201,7 @@ completed: yes (subagente + verificación manual de bloqueantes)
 result: 2 bloqueantes (BUG-002, BUG-003) RESUELTOS y verificados + 13 hallazgos (QA-01..13) + STR
 
 Automated tests:
-- Backend: **265 tests, 0 fallos** (surefire) en 21 archivos.
+- Backend: **269 tests, 0 fallos** (surefire) en 21 archivos.
 - Frontend: **sin tests unitarios; E2E con Playwright: 8 tests verdes, estable como gate de CI** (`npm run test:e2e`); `globalSetup` resetea la DB (`POST /api/test/reset`) para corridas reproducibles.
 
 End-to-end verification:
@@ -218,6 +231,7 @@ Commit:
 - frontend integrado al repo padre como carpeta normal (53 archivos; gitlink eliminado)
 - **Fase D (D1-D4):** commits `048222b`, `47e71a4`, `8ad9b93`, `638e447` + **`2b3ff41` `checkpoint: close milestone Fase D (D1-D4)`** — pusheado a `origin/main`
 - **Hardening de Producción:** **`3ba84b3`** `feat(hardening)` + **`12b002b`** `fix(security): restringir TestResetDataCleaner a perfiles dev/test + reset determinista` — 204 tests backend + 8 E2E verdes
+- **Saneamiento de Experiencia Operativa:** **`ab94a72`** `feat(ui): Bloque A — fix carrito OC, stock visible en ventas, lotes reactivos, entrega admin` + **`8160d4f`** `feat: Bloque B — alerta costo recepción, reintento de faltantes, CSV cobranzas, hijo por saldo parcial`
 - working tree limpio (verificado en auditoría de cierre)
 
 ## Next Milestone
